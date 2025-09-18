@@ -19,6 +19,7 @@ const getSessionDetails = (req) => {
     return { ipAddress: ip, device: `${agent.toAgent()} on ${agent.os.toString()}`, location };
 };
 
+
 const generateAndSendEmailOtp = async (user, targetEmail) => {
     const otp = Math.floor(100000 + Math.random() * 900000).toString();
     user.emailOtp = otp;
@@ -335,7 +336,8 @@ exports.loginUser = async (req, res) => {
                     activeSession: user.activeSession
                 });
             } catch (jwtError) {
-                user.activeSession = undefined;
+                user.activeSession = newSession;
+        user.sessions.push(newSession);
                 await user.save();
                 console.log('[Login] Expired/Invalid session token found and cleared.');
             }
@@ -735,9 +737,9 @@ exports.updateLearnsProfile = async (req, res) => {
         const user = await User.findById(req.user.id);
 
         if (!user) {
-            return res.status(404).json({ msgKey: 'errors.user_not_found' });
+            return res.status(404).json({ msg: 'User not found' });
         }
-        
+
         user.learningGoals = learningGoals;
         user.experienceLevel = experienceLevel;
         user.areasOfInterest = areasOfInterest;
@@ -752,7 +754,6 @@ exports.updateLearnsProfile = async (req, res) => {
     }
 };
 
-// --- NEW FUNCTION: Upload Profile Picture ---
 exports.uploadProfilePicture = async (req, res) => {
     try {
         const user = await User.findById(req.user.id);
@@ -760,21 +761,20 @@ exports.uploadProfilePicture = async (req, res) => {
             return res.status(404).json({ msg: 'User not found' });
         }
 
-        // Assuming file is uploaded and available via req.file (e.g., using multer)
-        // For now, this is a placeholder. A proper file upload setup (like Multer and an S3 bucket) is required.
         if (!req.file) {
             return res.status(400).json({ msg: 'No file uploaded' });
         }
         
-        // This is a placeholder. In a real-world scenario, you'd upload the file
-        // to a service like AWS S3 or Cloudinary and save the public URL.
         const fileUrl = `${req.protocol}://${req.get('host')}/uploads/${req.file.filename}`;
         user.profilePicture = fileUrl;
         await user.save();
 
-        res.status(200).json({ msg: 'Profile picture updated successfully', profilePictureUrl: fileUrl });
+        res.status(200).json({ 
+            msg: 'Profile picture updated successfully', 
+            profilePicture: user.profilePicture 
+        });
     } catch (err) {
-        console.error("Error uploading profile picture:", err);
-        res.status(500).json({ msg: 'Server Error' });
+        console.error('Error uploading profile picture:', err);
+        res.status(500).json({ msg: 'Server error' });
     }
 };

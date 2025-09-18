@@ -7,58 +7,62 @@ const axios = require('axios');
 const puppeteer = require('puppeteer');
 const mongoose = require('mongoose');
 const User = require('../models/User');
+const Subscription = require('../models/Subscription'); // <-- ADD THIS LINE
 
 
 
 exports.generateCourse = async (req, res) => {
     try {
-        // --- FIX: Check user's course generation quota ---
-        const user = await User.findById(req.user.id);
-        const subscription = await Subscription.findOne({ user: userId, status: 'active' }).populate('plan');
-        
+        const userId = req.user.id; // <-- Use userId for clarity
+        const user = await User.findById(userId);
+
         if (!user) {
             return res.status(404).json({ msg: 'User not found.' });
         }
 
-        if (user.coursesRemaining <= 0) {
-            return res.status(403).json({ msgKey: 'errors.quota_exceeded' });
-        }
+        // --- UPDATED QUOTA CHECK ---
+        const subscription = await Subscription.findOne({ user: userId, status: 'active' }).populate('plan');
 
         if (!subscription) {
-      return res.status(403).json({ message: 'No active subscription found.' });
-    }
+            return res.status(403).json({ msgKey: 'errors.no_active_subscription' });
+        }
 
-    if (subscription.coursesGenerated >= subscription.plan.coursesPerMonth) {
-      return res.status(403).json({ message: 'You have exhausted your course generation quota for the month.' });
-    }
+        if (subscription.coursesGenerated >= subscription.plan.coursesPerMonth) {
+            return res.status(403).json({ msgKey: 'errors.quota_exceeded' });
+        }
+        // --- END UPDATED QUOTA CHECK ---
 
+        const { topic, objective, outcome, numSubtopics, language, languageName, nativeName, englishTopic, englishObjective, englishOutcome } = req.body;
 
-        const { topic, objective, outcome, subtopicCount, language, level } = req.body;
-
-        const prompt = `...`; // Your existing prompt
-        
-        const generatedContent = await generateWithFallback(prompt);
-        
-        // ... (rest of your course generation logic)
-
-        const course = new Course({
-            // ... (course data)
+        const newCourse = new Course({
+            user: userId,
+            topic,
+            objective,
+            outcome,
+            numSubtopics,
+            language,
+            languageName,
+            nativeName,
+            englishTopic,
+            englishObjective,
+            englishOutcome,
+            status: 'generating_index'
         });
 
-        // --- FIX: Decrement user's course count after successful generation ---
-        user.coursesRemaining -= 1;
-        await user.save();
-        
-        await course.save();
-        res.status(201).json(course);
+        // --- DEBIT THE COURSE COUNT ---
+        subscription.coursesGenerated += 1;
+        await subscription.save();
+        // --- END DEBIT ---
 
-    } catch (err) {
-        console.error('Course Generation Error:', err);
-        res.status(500).json({ msgKey: 'errors.generic' });
+        const savedCourse = await newCourse.save();
+
+        res.status(201).json({ courseId: savedCourse._id, msg: 'Course creation started successfully.' });
+
+    } catch (error) {
+        console.error("Error starting course generation:", error);
+        res.status(500).json({ msgKey: "errors.generic" });
     }
 };
-
-
 
 const cleanAIText = (text) => {
     if (typeof text !== 'string') return '';

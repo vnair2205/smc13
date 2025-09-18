@@ -41,7 +41,6 @@ const UserSchema = new mongoose.Schema({
         enum: ['pending_payment', 'active', 'inactive', 'expired'],
         default: 'pending_payment',
     },
-    // --- NEW FIELD ---
     coursesRemaining: {
         type: Number,
         default: 0
@@ -66,13 +65,19 @@ const UserSchema = new mongoose.Schema({
     experienceLevel: { type: String, default: 'Beginner' },
     areasOfInterest: { type: [String], default: [] },
     resourceNeeds: { type: [String], default: [] },
-    newSkillTarget: { type: String, default: '' },
-
-
-    // Session Management
-    activeSession: SessionSchema, 
-    resetPasswordToken: { type: String },
-    resetPasswordExpires: { type: Date },
+    // --- FIX: Changed type from String to an array of Strings ---
+    newSkillTarget: { 
+        type: [String], 
+        default: [] 
+    },
+    // -----------------------------------------------------------
+    sessions: [SessionSchema],
+    activeSession: SessionSchema,
+    passwordResetToken: String,
+    passwordResetExpires: Date,
+    courses: [{ type: mongoose.Schema.Types.ObjectId, ref: 'Course' }]
+}, {
+    timestamps: true
 });
 
 module.exports = mongoose.model('User', UserSchema);

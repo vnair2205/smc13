@@ -2,6 +2,7 @@
 const crypto = require('crypto');
 const User = require('../models/User');
 const Subscription = require('../models/Subscription');
+const SubscriptionPlan = require('../models/SubscriptionPlan'); // <-- ADD THIS LINE
 
 exports.handleRazorpayWebhook = async (req, res) => {
     const secret = process.env.RAZORPAY_WEBHOOK_SECRET;
@@ -14,41 +15,46 @@ exports.handleRazorpayWebhook = async (req, res) => {
         const payload = req.body.payload;
 
         if (event === 'subscription.charged') {
-            const subscriptionId = payload.subscription.id;
+            const razorpaySubscriptionId = payload.subscription.entity.id;
             const paymentId = payload.payment.entity.id;
 
-            const subscription = await Subscription.findOne({ 'razorpay_subscription_id': subscriptionId }).populate('plan');
-            if (subscription) {
-                const user = await User.findById(subscription.user);
-                
-                // Reset course credits
-                user.coursesRemaining = subscription.plan.coursesPerMonth;
-                
-                // Create new subscription record for the new month
-                const newEndDate = new Date(subscription.endDate);
-                newEndDate.setMonth(newEndDate.getMonth() + 1);
+            const user = await User.findOne({ razorpaySubscriptionId });
 
+            if (user && user.activeSubscription) {
+                const plan = await SubscriptionPlan.findById(user.selectedPlan);
+                const endDate = new Date();
+                endDate.setMonth(endDate.getMonth() + 1);
+
+                // Create a new subscription record for the new billing cycle
                 const newSubscription = new Subscription({
                     user: user._id,
-                    plan: subscription.plan._id,
+                    plan: user.selectedPlan,
                     razorpay_payment_id: paymentId,
-                    // ... other details
-                    endDate: newEndDate,
+                    razorpay_order_id: payload.payment.entity.order_id,
+                    razorpay_signature: "webhook-generated", // Or some other placeholder
+                    endDate,
+                    status: 'active',
+                    coursesGenerated: 0 // Reset the course count
                 });
                 await newSubscription.save();
 
+                // Update the user's active subscription to the new one
                 user.activeSubscription = newSubscription._id;
+                user.subscriptionStatus = 'active';
                 await user.save();
             }
         }
 
         if (event === 'subscription.halted') {
-            const subscriptionId = payload.subscription.id;
-            const subscription = await Subscription.findOne({ 'razorpay_subscription_id': subscriptionId });
-            if (subscription) {
-                const user = await User.findById(subscription.user);
-                user.subscriptionStatus = 'inactive';
+            const razorpaySubscriptionId = payload.subscription.entity.id;
+            const user = await User.findOne({ razorpaySubscriptionId });
+
+            if (user) {
+                user.subscriptionStatus = 'inactive'; // Mark the user as inactive
                 await user.save();
+
+                // Also update the subscription status to 'cancelled'
+                await Subscription.findByIdAndUpdate(user.activeSubscription, { status: 'cancelled' });
             }
         }
         
