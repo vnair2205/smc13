@@ -22,33 +22,40 @@ const ApiErrorText = styled.p`
     min-height: 20px;
 `;
 
-const Step1_Topic = ({ nextStep, prevStep, updateCourseData, data, isLoading, error }) => {
+// *** FIX: Changed 'updateCourseData' to 'onDataChange' and 'data' to 'courseData' ***
+const Step1_Topic = ({ onNext, onPrev, onDataChange, courseData = {}, isLoading, error }) => {
     const { t } = useTranslation();
-    const isRTL = ['ar', 'ur'].includes(data.language);
+    
+    const isRTL = ['ar', 'ur'].includes(courseData.language);
 
-    // Define placeholder texts using translation keys
-    // You will need to add these keys to your translation.json files
     const translatedPlaceholderExamples = [
-        t("placeholder.example1"), // e.g., "The history of ancient Rome..."
-        t("placeholder.example2"), // e.g., "Introduction to quantum computing..."
-        t("placeholder.example3"), // e.g., "Mastering sourdough bread baking..."
-        t("placeholder.example4"), // e.g., "Basics of financial literacy..."
-        t("placeholder.example5")  // e.g., "Beginner's guide to digital art..."
+        t("placeholder.example1"),
+        t("placeholder.example2"),
+        t("placeholder.example3"),
+        t("placeholder.example4"),
     ];
-
+    
     const [animatedPlaceholderText, setAnimatedPlaceholderText] = useState(translatedPlaceholderExamples[0]);
+    const [showAnimatedPlaceholder, setShowAnimatedPlaceholder] = useState(true);
 
     useEffect(() => {
-        const interval = setInterval(() => {
-            const currentIndex = translatedPlaceholderExamples.indexOf(animatedPlaceholderText);
-            const nextIndex = (currentIndex + 1) % translatedPlaceholderExamples.length;
-            setAnimatedPlaceholderText(translatedPlaceholderExamples[nextIndex]);
-        }, 4000); // Adjust animation speed as needed
-        return () => clearInterval(interval);
-    }, [animatedPlaceholderText, translatedPlaceholderExamples]); // Added translatedPlaceholderExamples to dependencies
+        if (courseData.topic) {
+            setShowAnimatedPlaceholder(false);
+        } else {
+            setShowAnimatedPlaceholder(true);
+        }
 
-    // Determine if the animated placeholder should be shown
-    const showAnimatedPlaceholder = (!data.topic || data.topic.trim() === '');
+        const interval = setInterval(() => {
+            setAnimatedPlaceholderText(prev => {
+                const currentIndex = translatedPlaceholderExamples.indexOf(prev);
+                const nextIndex = (currentIndex + 1) % translatedPlaceholderExamples.length;
+                return translatedPlaceholderExamples[nextIndex];
+            });
+        }, 3000);
+
+        return () => clearInterval(interval);
+    }, [courseData.topic, translatedPlaceholderExamples]);
+
 
     return (
         <StepContentContainer>
@@ -60,9 +67,9 @@ const Step1_Topic = ({ nextStep, prevStep, updateCourseData, data, isLoading, er
             <InputWrapper>
                 <StyledInput
                     type="text"
-                    value={data.topic || ''}
-                    onChange={(e) => updateCourseData({ topic: e.target.value })}
-                    // Conditionally set placeholder: empty if animated one is shown, else use translated static one
+                    value={courseData.topic || ''}
+                    // *** FIX: Call onDataChange with the correct arguments ***
+                    onChange={(e) => onDataChange('topic', e.target.value)}
                     placeholder={showAnimatedPlaceholder ? "" : t('placeholder.enterTopic')}
                     disabled={isLoading}
                     dir={isRTL ? 'rtl' : 'ltr'}
@@ -75,13 +82,14 @@ const Step1_Topic = ({ nextStep, prevStep, updateCourseData, data, isLoading, er
             <ApiErrorText>{error}</ApiErrorText>
 
             <NavigationButtons>
-                <NavButton onClick={prevStep} disabled={isLoading}>
+                {/* Note: onPrev might not be passed from the parent for the first step */}
+                <NavButton onClick={onPrev} disabled={isLoading}>
                     {t('course_generation.back_button')}
                 </NavButton>
                 <NavButton
                     primary
-                    onClick={nextStep}
-                    disabled={!data.topic || isLoading}
+                    onClick={onNext} // Use onNext here
+                    disabled={!courseData.topic || isLoading}
                 >
                     {isLoading ? t('course_generation.generating_button') : t('course_generation.next_button')}
                 </NavButton>

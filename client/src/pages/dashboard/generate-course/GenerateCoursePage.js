@@ -1,12 +1,15 @@
+// client/src/pages/dashboard/generate-course/GenerateCoursePage.js
+
 import React, { useState, useEffect } from 'react';
-import axios from 'axios';
+// import axios from 'axios'; // We don't need the original axios anymore
 import { useTranslation } from 'react-i18next';
 import styled from 'styled-components';
-import { useNavigate } from 'react-router-dom'; // <-- FIX: Changed useHistory to useNavigate
+import { useNavigate } from 'react-router-dom';
 import { PageWrapper } from './GenerateCourse.styles';
 import ProgressBar from './ProgressBar';
 import Preloader from '../../../components/common/Preloader';
 import { Modal, ModalText, ModalButtonContainer, ModalButton } from '../../../components/common/Modal';
+import api from '../../../utils/api'; // <-- We will use this for all calls
 
 // Import all the step components
 import Step1_Topic from './Step1_Topic';
@@ -24,7 +27,7 @@ const SuggestionButton = styled(ModalButton)`
 
 const GenerateCoursePage = () => {
     const { t } = useTranslation();
-    const navigate = useNavigate(); // <-- FIX: Changed useHistory to useNavigate
+    const navigate = useNavigate();
     const [currentStep, setCurrentStep] = useState(1);
     const [courseData, setCourseData] = useState({
         courseId: null,
@@ -53,7 +56,8 @@ const GenerateCoursePage = () => {
     useEffect(() => {
         const checkSubscriptionStatus = async () => {
             try {
-                const res = await axios.get('/api/subscriptions/history');
+                // *** FIX: Use 'api' instead of 'axios' ***
+                const res = await api.get('/subscriptions/history');
                 const { currentPlan } = res.data;
                 if (currentPlan && currentPlan.coursesGenerated < currentPlan.totalCourses) {
                     setCanGenerate(true);
@@ -83,7 +87,8 @@ const GenerateCoursePage = () => {
             }
             setIsLoading(true);
             try {
-                const res = await axios.post('/api/courses/refine-topic', { topic: courseData.topic, language: courseData.language, languageName: courseData.languageName, nativeName: courseData.nativeName });
+                // *** FIX: Use 'api' instead of 'axios' ***
+                const res = await api.post('/courses/refine-topic', { topic: courseData.topic, language: courseData.language, languageName: courseData.languageName, nativeName: courseData.nativeName });
                 setTopicSuggestions(res.data.suggestions);
                 setCourseData(prev => ({ ...prev, englishTopic: res.data.englishTopic }));
                 setIsRefineTopicModalOpen(true);
@@ -95,7 +100,8 @@ const GenerateCoursePage = () => {
         } else if (currentStep === 2) {
              setIsLoading(true);
              try {
-                 const res = await axios.post('/api/courses/generate-outcome', {
+                 // *** FIX: Use 'api' instead of 'axios' ***
+                 const res = await api.post('/courses/generate-outcome', {
                      topic: courseData.topic,
                      objective: courseData.objective,
                      englishTopic: courseData.englishTopic,
@@ -118,7 +124,8 @@ const GenerateCoursePage = () => {
         } else if (currentStep === 5) {
              setIsLoading(true);
              try {
-                const res = await axios.post('/api/courses', {
+                // *** FIX: Use 'api' instead of 'axios' ***
+                const res = await api.post('/courses', {
                     topic: courseData.topic,
                     objective: courseData.objective,
                     outcome: courseData.outcome,
@@ -149,7 +156,8 @@ const GenerateCoursePage = () => {
         setIsRefineTopicModalOpen(false);
         setIsLoading(true);
         try {
-            const res = await axios.post('/api/courses/generate-objective', {
+            // *** FIX: Use 'api' instead of 'axios' ***
+            const res = await api.post('/courses/generate-objective', {
                 topic: selectedSuggestion.title,
                 englishTopic: selectedSuggestion.englishTitle,
                 language: courseData.language,
@@ -172,7 +180,8 @@ const GenerateCoursePage = () => {
     const handleRefineObjective = async (index, value) => {
         setIsLoading(true);
         try {
-            const res = await axios.post('/api/courses/refine-objective', {
+            // *** FIX: Use 'api' instead of 'axios' ***
+            const res = await api.post('/courses/refine-objective', {
                 topic: courseData.topic,
                 englishTopic: courseData.englishTopic,
                 objective: value,
@@ -189,6 +198,7 @@ const GenerateCoursePage = () => {
         }
     };
     
+    // ... (rest of your component remains the same)
     const handleSelectObjectiveSuggestion = (suggestion) => {
         const newObjectives = [...courseData.objective];
         const newEnglishObjectives = [...courseData.englishObjective];

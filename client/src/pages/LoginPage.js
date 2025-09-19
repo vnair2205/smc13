@@ -175,7 +175,7 @@ const LoginPage = () => {
     setError('');
     try {
       const res = await axios.post('/api/auth/login', formData);
-      localStorage.setItem('token', res.data.token);
+        localStorage.setItem('token', res.data.token);
       navigate('/dashboard');
     } catch (err) {
       if (err.response?.status === 409) {
