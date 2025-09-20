@@ -264,9 +264,6 @@ const Sidebar = ({ isCollapsed, setIsCollapsed }) => {
         { action: handleLogoutClick, icon: <FiLogOut />, nameKey: "sidebar.logout", variant: 'light' },
     ];
 
-
-    
-
     return (
         <>
             <Modal
