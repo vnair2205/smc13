@@ -323,39 +323,63 @@ exports.loginUser = async (req, res) => {
     const { email, password } = req.body;
     try {
         const user = await User.findOne({ email });
-        if (!user) return res.status(400).json({ msgKey: 'errors.invalid_credentials' });
-
-        const isMatch = await bcrypt.compare(password, user.password);
-        if (!isMatch) return res.status(400).json({ msgKey: 'errors.invalid_credentials' });
-
-        if (user.activeSession) {
-            try {
-                jwt.verify(user.activeSession.token, process.env.JWT_SECRET);
-                return res.status(409).json({
-                    msgKey: 'errors.session_conflict',
-                    activeSession: user.activeSession
-                });
-            } catch (jwtError) {
-                user.activeSession = newSession;
-        user.sessions.push(newSession);
-                await user.save();
-                console.log('[Login] Expired/Invalid session token found and cleared.');
-            }
+        if (!user) {
+            return res.status(400).json({ msg: 'Invalid credentials' });
         }
 
-       const payload = { user: { id: user.id } };
-    const token = jwt.sign(payload, process.env.JWT_SECRET, { expiresIn: '5h' });
+        const isMatch = await bcrypt.compare(password, user.password);
+        if (!isMatch) {
+            return res.status(400).json({ msg: 'Invalid credentials' });
+        }
 
-    user.activeSession = { token, ...getSessionDetails(req) };
+        if (!user.isEmailVerified) {
+            return res.status(401).json({
+                msg: 'Please verify your email to login.',
+                verificationRequired: 'email'
+            });
+        }
 
-    await user.save(); 
+        if (!user.isPhoneVerified) {
+            return res.status(401).json({
+                msg: 'Please verify your phone to login.',
+                verificationRequired: 'phone'
+            });
+        }
+
+        const payload = {
+            user: {
+                id: user.id,
+                role: user.role,
+            },
+        };
+
+        const token = jwt.sign(payload, process.env.JWT_SECRET, { expiresIn: '5h' });
+
+        const sessionDetails = getSessionDetails(req);
+        const newSession = {
+            ...sessionDetails,
+            token: token,
+        };
+
+        // --- FIX STARTS HERE ---
+
+        // 1. Set the user's active session to the new session
+        user.activeSession = newSession;
+
+        // 2. Push the new session to the session history array
+        user.sessions.push(newSession);
+        
+        // --- FIX ENDS HERE ---
+
+        await user.save();
+
         res.json({ token });
+
     } catch (err) {
         console.error(err.message);
-        res.status(500).json({ msgKey: 'errors.generic' });
+        res.status(500).send('Server error');
     }
 };
-
 
 exports.verifyEmail = async (req, res) => {
     const { otp } = req.body;

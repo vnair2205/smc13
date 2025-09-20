@@ -36,6 +36,11 @@ const UserSchema = new mongoose.Schema({
         type: mongoose.Schema.Types.ObjectId,
         ref: 'Subscription',
     },
+
+     razorpaySubscriptionId: {
+        type: String,
+        trim: true,
+    },
     subscriptionStatus: {
         type: String,
         enum: ['pending_payment', 'active', 'inactive', 'expired'],

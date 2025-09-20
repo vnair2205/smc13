@@ -99,33 +99,51 @@ exports.deletePlan = async (req, res) => {
 // @access  Private
 exports.getSubscriptionHistory = async (req, res) => {
     try {
-        const subscriptions = await Subscription.find({ user: req.user.id })
-            .populate('plan')
-            .sort({ startDate: -1 });
-
+        // --- FIX STARTS HERE ---
+        // The fix is in how we populate the user's active subscription.
+        // We need to first populate the 'activeSubscription', and then populate the 'plan' within it.
         const user = await User.findById(req.user.id).populate({
             path: 'activeSubscription',
             populate: {
-                path: 'plan'
+                path: 'plan',
+                model: 'SubscriptionPlan'
             }
         });
+        // --- FIX ENDS HERE ---
+
+        if (!user) {
+            return res.status(404).json({ message: 'User not found' });
+        }
+
+        const page = parseInt(req.query.page, 10) || 1;
+        const limit = parseInt(req.query.limit, 10) || 10;
+        const skip = (page - 1) * limit;
+
+        const totalSubscriptions = await Subscription.countDocuments({ user: req.user.id });
+
+        const subscriptions = await Subscription.find({ user: req.user.id })
+            .populate('plan') // This part was already correct for the history table
+            .sort({ startDate: -1 })
+            .skip(skip)
+            .limit(limit);
 
         let currentPlanData = null;
+        // Now, this check will work correctly because the data is properly populated.
         if (user.activeSubscription && user.activeSubscription.plan) {
             currentPlanData = {
-                planName: user.activeSubscription.plan.name,
-                startDate: user.activeSubscription.startDate,
+                name: user.activeSubscription.plan.name,
                 endDate: user.activeSubscription.endDate,
-                status: user.activeSubscription.status,
-                coursesGenerated: user.activeSubscription.coursesGenerated,
-                totalCourses: user.activeSubscription.plan.coursesPerMonth
             };
         }
 
         res.json({
-            history: subscriptions,
+            subscriptions,
+            totalSubscriptions,
             currentPlan: currentPlanData,
+            currentPage: page,
+            totalPages: Math.ceil(totalSubscriptions / limit),
         });
+
     } catch (error) {
         console.error('Error fetching subscription history:', error);
         res.status(500).json({ message: 'Server error' });
