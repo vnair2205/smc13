@@ -18,24 +18,36 @@ const UserSchema = new mongoose.Schema({
     isPhoneVerified: { type: Boolean, default: false },
     phoneOtp: { type: String },
     phoneOtpExpires: { type: Date },
+    // --- 1. ADD THIS NEW FIELD ---
+    phoneOtpSessionId: { type: String }, // To store the session ID from 2Factor
+    
     date: { type: Date, default: Date.now },
     isEmailVerified: { type: Boolean, default: false },
-
-    // --- NEW FIELDS FOR EMAIL UPDATE PROCESS ---
     emailOtp: { type: String },
     emailOtpExpires: { type: Date },
-    pendingNewEmail: { type: String }, // To temporarily hold the new email during verification
-
-
-      pendingNewPhone: { type: String },
-
-    // --- Profile Fields ---
-    profilePicture: { 
-        type: String, 
+    pendingNewEmail: { type: String },
+    pendingNewPhone: { type: String },
+    profilePicture: {
+        type: String,
         default: 'https://i.imgur.com/6b6psnA.png'
     },
-
-
+    selectedPlan: {
+        type: mongoose.Schema.Types.ObjectId,
+        ref: 'SubscriptionPlan',
+    },
+    activeSubscription: {
+        type: mongoose.Schema.Types.ObjectId,
+        ref: 'Subscription',
+    },
+    status: {
+        type: String,
+        enum: ['active', 'inactive', 'pending_payment', 'unverified'],
+        default: 'pending_payment',
+    },
+    coursesRemaining: {
+        type: Number,
+        default: 0
+    },
     billingAddress: {
         addressLine1: { type: String, default: '' },
         addressLine2: { type: String, default: '' },
@@ -44,8 +56,6 @@ const UserSchema = new mongoose.Schema({
         zipCode: { type: String, default: '' },
         country: { type: String, default: '' },
     },
-    
-    // BIO Section
     bio: { type: String, default: '' },
     socialMedia: {
         instagram: { type: String, default: '' },
@@ -54,18 +64,19 @@ const UserSchema = new mongoose.Schema({
         linkedin: { type: String, default: '' },
         facebook: { type: String, default: '' },
     },
-
-    // LEARNS Profile Section
     learningGoals: { type: [String], default: [] },
     experienceLevel: { type: String, default: 'Beginner' },
     areasOfInterest: { type: [String], default: [] },
     resourceNeeds: { type: [String], default: [] },
-    newSkillTarget: { type: [String], default: [] },
+    newSkillTarget: { 
+        type: [String], 
+        default: [] 
+    },
+    sessions: [SessionSchema],
+    activeSession: SessionSchema,
+    passwordResetToken: String,
+    passwordResetExpires: Date,
+}, { timestamps: true });
 
-    // Session Management
-    activeSession: SessionSchema, 
-    resetPasswordToken: { type: String },
-    resetPasswordExpires: { type: Date },
-});
 
 module.exports = mongoose.model('User', UserSchema);

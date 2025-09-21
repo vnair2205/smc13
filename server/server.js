@@ -58,6 +58,10 @@ app.use('/api/admin/support', require('./routes/adminSupport'));
 app.use('/api/public/knowledgebase', require('./routes/publicKnowledgebase'));
 app.use('/api/public/blogs', require('./routes/publicBlog'));
 app.use('/api/legal', legalRoutes);
+app.use('/api/subscriptions', require('./routes/subscriptionRoutes'));
+app.use('/api/payments', require('./routes/paymentRoutes'));
+
+app.use('/api/webhooks', require('./routes/webhookRoutes'));
 
 
 

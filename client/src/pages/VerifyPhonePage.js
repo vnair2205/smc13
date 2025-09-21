@@ -8,7 +8,7 @@ import Preloader from '../components/common/Preloader';
 import PhoneInput from 'react-phone-number-input';
 import 'react-phone-number-input/style.css';
 
-// --- Styled Components ---
+// --- Styled Components (No changes needed here) ---
 const PageContainer = styled.div`
   display: flex;
   justify-content: center;
@@ -156,68 +156,72 @@ const NotificationText = styled.div`
   box-sizing: border-box;
 `;
 
+
 const VerifyPhonePage = () => {
     const { t } = useTranslation();
     const navigate = useNavigate();
-    const location = useLocation();
-    const { email, phone: initialPhone } = location.state || {};
-
+    const { state } = useLocation();
     const [otp, setOtp] = useState('');
-    const [currentPhone, setCurrentPhone] = useState(initialPhone);
-    const [timer, setTimer] = useState(30);
-    const [canResend, setCanResend] = useState(false);
+    const [currentPhone, setCurrentPhone] = useState(state?.phone || '');
+    const [email, setEmail] = useState(state?.email || '');
     const [isLoading, setIsLoading] = useState(false);
+    const [notification, setNotification] = useState({ type: '', text: '' });
+    const [timer, setTimer] = useState(60);
+    const [canResend, setCanResend] = useState(false);
     const [isChangingNumber, setIsChangingNumber] = useState(false);
     const [newPhoneNumber, setNewPhoneNumber] = useState('');
-    const [notification, setNotification] = useState({ type: '', text: '' });
 
+    useEffect(() => {
+        if (!state?.phone || !state?.email) {
+            navigate('/signup');
+        }
+    }, [state, navigate]);
+    
     const startTimer = () => {
+        setTimer(60);
         setCanResend(false);
-        setTimer(30);
-        const intervalId = setInterval(() => {
-            setTimer((prev) => {
-                if (prev <= 1) {
-                    clearInterval(intervalId);
-                    setCanResend(true);
-                    return 0;
-                }
-                return prev - 1;
-            });
-        }, 1000);
-        return intervalId;
     };
 
     useEffect(() => {
-        if (!email) { 
-            navigate('/signup'); 
-            return;
+        const interval = setInterval(() => {
+            setTimer((prev) => (prev > 0 ? prev - 1 : 0));
+        }, 1000);
+        if (timer === 0) {
+            setCanResend(true);
+            clearInterval(interval);
         }
-        const timerId = startTimer();
-        return () => clearInterval(timerId);
-    }, [email, navigate]);
+        return () => clearInterval(interval);
+    }, [timer]);
 
     const handleSubmit = async (e) => {
         e.preventDefault();
         setIsLoading(true);
         setNotification({ type: '', text: '' });
         try {
-            await axios.post('/api/auth/verify-phone', { email, otp });
-            navigate('/verify-email', { state: { email } });
+            await axios.post('/api/auth/verify-signup-phone', { phoneNumber: currentPhone, otp });
+            // --- FIX: Pass the phone number to the next page ---
+            navigate('/verify-email', { state: { email: email, phone: currentPhone } });
         } catch (err) {
-            setNotification({ type: 'error', text: t(err.response?.data?.msgKey || 'errors.generic')});
+            const errorMsg = err.response?.data?.msg || 'Verification failed. Please try again.';
+            setNotification({ type: 'error', text: t(errorMsg) });
+        } finally {
             setIsLoading(false);
         }
     };
 
     const handleResend = async () => {
         if (!canResend) return;
+        setIsLoading(true);
         setNotification({ type: '', text: '' });
         try {
-            const res = await axios.post('/api/auth/resend-phone-otp', { email });
-            setNotification({ type: 'success', text: t(res.data.msg || 'phone_otp_resent_success') });
+            await axios.post('/api/auth/resend-signup-phone-otp', { phoneNumber: currentPhone });
+            setNotification({ type: 'success', text: t('otp_resent_success') });
             startTimer();
         } catch (err) {
-            setNotification({ type: 'error', text: t(err.response?.data?.msgKey || 'errors.otp_failed_resend') });
+            const errorMsg = err.response?.data?.msg || 'Failed to resend OTP.';
+            setNotification({ type: 'error', text: t(errorMsg) });
+        } finally {
+            setIsLoading(false);
         }
     };
 
@@ -229,14 +233,19 @@ const VerifyPhonePage = () => {
         }
         setIsLoading(true);
         try {
-            await axios.post('/api/auth/update-phone', { email, newPhoneNumber });
-            setNotification({ type: 'success', text: t('phone_update_success') });
+            await axios.post('/api/auth/change-signup-phone', {
+                oldPhoneNumber: currentPhone,
+                newPhoneNumber: newPhoneNumber,
+                email: email
+            });
+            
+            setNotification({ type: 'success', text: t('phone_update_success_otp_sent') });
             setCurrentPhone(newPhoneNumber);
             setIsChangingNumber(false);
             setNewPhoneNumber('');
             startTimer();
         } catch (err) {
-            setNotification({ type: 'error', text: t(err.response?.data?.msgKey || 'errors.phone_update_failed') });
+            setNotification({ type: 'error', text: t(err.response?.data?.msg || 'errors.phone_update_failed') });
         } finally {
             setIsLoading(false);
         }

@@ -1,4 +1,5 @@
-import React, { useState } from 'react';
+// client/src/pages/dashboard/generate-course/GenerateCoursePage.js
+import React, { useState, useEffect } from 'react';
 import axios from 'axios';
 import { useTranslation } from 'react-i18next';
 import styled from 'styled-components';
@@ -6,6 +7,9 @@ import { PageWrapper } from './GenerateCourse.styles';
 import ProgressBar from './ProgressBar';
 import Preloader from '../../../components/common/Preloader';
 import { Modal, ModalText, ModalButtonContainer, ModalButton } from '../../../components/common/Modal';
+import QuotaExceededModal from '../../../components/subscriptions/QuotaExceededModal';
+import UpgradeModal from '../../../components/subscriptions/UpgradeModal';
+import api from '../../../utils/api';
 
 // Import all the step components
 import Step1_Topic from './Step1_Topic';
@@ -22,6 +26,10 @@ const SuggestionButton = styled(ModalButton)`
 `;
 
 const GenerateCoursePage = () => {
+    const [userProfile, setUserProfile] = useState(null);
+    const [loading, setLoading] = useState(true);
+    const [showQuotaModal, setShowQuotaModal] = useState(false);
+    const [showUpgradeModal, setShowUpgradeModal] = useState(false);
     const { t } = useTranslation();
     const [currentStep, setCurrentStep] = useState(1);
     const [courseData, setCourseData] = useState({
@@ -29,7 +37,7 @@ const GenerateCoursePage = () => {
         topic: '',
         englishTopic: '',
         objective: [],
-        outcome: [], // CHANGED: Outcome is now an array
+        outcome: [],
         numSubtopics: 1,
         language: 'en',
         languageName: 'English',
@@ -40,10 +48,8 @@ const GenerateCoursePage = () => {
     });
     const [isLoading, setIsLoading] = useState(false);
     const [error, setError] = useState('');
-    
     const [topicSuggestions, setTopicSuggestions] = useState([]);
     const [isRefineTopicModalOpen, setIsRefineTopicModalOpen] = useState(false);
-    
     const [isRefineObjectiveModalOpen, setIsRefineObjectiveModalOpen] = useState(false);
     const [objectiveSuggestions, setObjectiveSuggestions] = useState([]);
     
@@ -55,19 +61,41 @@ const GenerateCoursePage = () => {
         if (error) setError('');
     };
 
+    const fetchUserProfile = async () => {
+        setLoading(true);
+        try {
+            const res = await api.get('/auth/profile');
+            setUserProfile(res.data);
+        } catch (error) {
+            console.error("Failed to fetch user profile", error);
+        } finally {
+            setLoading(false);
+        }
+    };
+
+    useEffect(() => {
+        fetchUserProfile();
+    }, []);
+
+    const handleOpenUpgradeModal = () => {
+        setShowQuotaModal(false);
+        setShowUpgradeModal(true);
+    };
+    
+    const handleUpgradeSuccess = () => {
+        fetchUserProfile(); // Refetch profile to get new quota
+        setShowUpgradeModal(false);
+    };
+
     const handleTopicSubmit = async () => {
         setIsLoading(true);
         setError('');
-
         const { topic, languageName, nativeName } = courseData;
-
         const token = localStorage.getItem('token');
         try {
             const config = { headers: { 'Content-Type': 'application/json', 'x-auth-token': token } };
-
             const body = JSON.stringify({ topic, languageName, nativeName });
             const res = await axios.post('/api/course/refine-topic', body, config);
-
             setTopicSuggestions(res.data.suggestions);
             setIsRefineTopicModalOpen(true);
         } catch (err) {
@@ -104,6 +132,8 @@ const GenerateCoursePage = () => {
                 languageName: updatedData.languageName,
                 nativeName: updatedData.nativeName
             });
+            
+            // This is the API call that will be blocked by the server if quota is exceeded
             const res = await axios.post('/api/course/generate-objective', body, config);
 
             updateCourseData({
@@ -113,10 +143,20 @@ const GenerateCoursePage = () => {
                 englishTopic: updatedData.englishTopic
             });
             nextStep();
+
         } catch (err) {
-            console.error("Error in proceedToObjectiveGeneration:", err.response?.data || err.message);
-            const errorMsg = t(err.response?.data?.msgKey || 'errors.generic');
-            setError(errorMsg);
+            // --- DEFINITIVE FIX IS HERE ---
+            // Check if the server responded with a 403 status (Forbidden/Quota Exceeded)
+            if (err.response && err.response.status === 403) {
+                // If it's a 403 error, we show the friendly upgrade modal.
+                setShowQuotaModal(true);
+            } else {
+                // For any other type of error, we show a generic failure message.
+                console.error("Error in proceedToObjectiveGeneration:", err.response?.data || err.message);
+                const errorMsg = t(err.response?.data?.msgKey || 'errors.generic');
+                setError(errorMsg);
+            }
+            // --- END OF FIX ---
         } finally {
             setIsLoading(false);
         }
@@ -163,7 +203,6 @@ const GenerateCoursePage = () => {
             const { courseId, topic, language, languageName, nativeName, englishTopic } = courseData;
             const body = JSON.stringify({ courseId, topic, objective: finalObjectives, language, languageName, nativeName, englishTopic });
             const res = await axios.post('/api/course/generate-outcome', body, config);
-            // CHANGED: Outcome from a single string to an array
             const outcomeArray = res.data.outcome.split('\n').filter(o => o.trim() !== '');
             updateCourseData({ outcome: outcomeArray });
             nextStep();
@@ -255,6 +294,17 @@ const GenerateCoursePage = () => {
                 </ModalButtonContainer>
             </Modal>
 
+             <QuotaExceededModal 
+                isOpen={showQuotaModal}
+                onClose={() => setShowQuotaModal(false)}
+                onUpgrade={handleOpenUpgradeModal}
+            />
+
+            <UpgradeModal 
+                isOpen={showUpgradeModal}
+                onClose={() => setShowUpgradeModal(false)}
+                onUpgradeSuccess={handleUpgradeSuccess}
+            />
             <ProgressBar currentStep={currentStep} />
             {renderStep()}
         </PageWrapper>

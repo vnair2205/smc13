@@ -116,6 +116,7 @@
     "password_required": "Password is required.",
     "password_min_length": "Password must be at least 6 characters.",
     "passwords_no_match": "Passwords do not match.",
+     "Plans & Addons": "Plans & Addons",
     "terms_required": "You must agree to the terms.",
     "email_exists": "This email is already registered.",
     "phone_exists": "This phone number is already registered.",
@@ -193,6 +194,7 @@
     "enter_objective_placeholder": "Enter your objective here...",
     "objective_label": "Objective",
     "course_generation.cancel_button":"Cancel"
+  
   },
 
    "quiz": {

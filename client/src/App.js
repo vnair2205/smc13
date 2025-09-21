@@ -50,6 +50,7 @@ import KnowledgebasePage from './pages/dashboard/KnowledgebasePage';
 import ViewArticlePage from './pages/dashboard/ViewArticlePage';
 import SupportTicketsPage from './pages/dashboard/SupportTicketsPage';
 import UserViewTicketPage from './pages/dashboard/UserViewTicketPage';
+import PlansAndAddonsPage from './pages/dashboard/PlansAndAddonsPage'; 
 
 // Admin Pages (for reference)
 import AdminSupportTicketsPage from './pages/admin/AdminSupportTicketsPage';
@@ -107,10 +108,13 @@ function App() {
                 <Route path="/knowledgebase/article/:articleId" element={<ViewArticlePage />} />
                 <Route path="/support-tickets" element={<SupportTicketsPage />} />
               <Route path="/dashboard/support-tickets/:ticketId" element={<UserViewTicketPage />} />
+              <Route path="/plans-and-addons" element={<PlansAndAddonsPage />} />
               
                 
                 
                 {/* --- THIS IS THE ONLY ADDITION --- */}
+               
+                <Route path="/profile" element={<ProfilePage />} />
                 <Route path="/profile" element={<ProfilePage />} />
               </Route>
 

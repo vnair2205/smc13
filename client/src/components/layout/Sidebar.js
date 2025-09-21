@@ -1,21 +1,22 @@
-// client/src/components/layout/Sidebar.js
 import React, { useState } from 'react';
 import styled, { css } from 'styled-components';
 import { NavLink, useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import axios from 'axios';
+// --- FIX: Added FiBookOpen back to the import list ---
 import {
     FiGrid, FiEdit, FiFolder, FiAward, FiUsers, FiHelpCircle, FiMessageSquare, FiCalendar, FiBookOpen,
     FiBell, FiUser, FiFileText, FiShield, FiLogOut, FiClock, FiChevronsLeft, FiChevronsRight,
-    FiChevronDown
+    FiChevronDown, FiPlusCircle
 } from 'react-icons/fi';
 import logo from '../../assets/seekmycourse_logo.png';
 import { Modal, ModalText, ModalButtonContainer, ModalButton } from '../common/Modal';
+import { useDashboard } from './DashboardLayout';
 
+// (All your styled-components remain the same)
 const expandedWidth = '300px';
 const collapsedWidth = '88px';
 
-// Use $isCollapsed for transient prop
 const SidebarContainer = styled.div`
   width: ${({ $isCollapsed }) => ($isCollapsed ? collapsedWidth : expandedWidth)};
   background-color: #1e1e2d;
@@ -219,40 +220,44 @@ const Separator = styled.hr`
   margin: 1rem 1.5rem;
 `;
 
-
 const Sidebar = ({ isCollapsed, setIsCollapsed }) => {
-     const [isHelpMenuOpen, setHelpMenuOpen] = useState(false);
+    const { t } = useTranslation();
     const navigate = useNavigate();
-    const { t, i18n } = useTranslation();
+    const [isHelpMenuOpen, setHelpMenuOpen] = useState(false);
     const [showLogoutConfirm, setShowLogoutConfirm] = useState(false);
+    const { isSubscribed, handleRenewRequest } = useDashboard();
 
-    const handleLogoutClick = () => {
-        setShowLogoutConfirm(true);
-    };
+    const handleLogoutClick = () => setShowLogoutConfirm(true);
 
     const confirmLogout = async () => {
         setShowLogoutConfirm(false);
         try {
-            const token = localStorage.getItem('token');
             await axios.post('/api/auth/logout', {}, {
-                headers: { 'x-auth-token': token }
+                headers: { 'x-auth-token': localStorage.getItem('token') }
             });
         } catch (error) {
-            console.error("Logout failed, proceeding to clear client-side session.", error);
+            console.error("Logout failed on server, clearing client-side session.", error);
         } finally {
             localStorage.removeItem('token');
             navigate('/login');
         }
     };
 
+    const handleLinkClick = (e, isProtected) => {
+        if (isProtected && !isSubscribed) {
+            e.preventDefault();
+            handleRenewRequest();
+        }
+    };
+
     const menuItems = [
         { path: "/dashboard", icon: <FiGrid />, nameKey: "sidebar.dashboard" },
-        { path: "/generate-course", icon: <FiEdit />, nameKey: "sidebar.generate_course" },
-        { path: "/pre-generated", icon: <FiFolder />, nameKey: "sidebar.pre_generated_courses" },
+        { path: "/generate-course", icon: <FiEdit />, nameKey: "sidebar.generate_course", isProtected: true },
+        { path: "/pre-generated", icon: <FiFolder />, nameKey: "sidebar.pre_generated_courses", isProtected: true },
         { path: "/my-courses", icon: <FiBookOpen />, nameKey: "sidebar.my_courses" },
         { path: "/my-certificates", icon: <FiAward />, nameKey: "sidebar.my_certificates" },
         { type: 'separator' },
-        { path: "/help-support", nameKey: "sidebar.help_support", icon: <FiHelpCircle /> },
+        { nameKey: "sidebar.help_support", icon: <FiHelpCircle /> },
         { path: "/blogs", icon: <FiBookOpen />, nameKey: "sidebar.blogs" },
         { path: "/notifications", icon: <FiBell />, nameKey: "sidebar.notifications" },
         { path: "/profile", icon: <FiUser />, nameKey: "sidebar.profile" },
@@ -265,11 +270,7 @@ const Sidebar = ({ isCollapsed, setIsCollapsed }) => {
 
     return (
         <>
-            <Modal
-                isOpen={showLogoutConfirm}
-                onClose={() => setShowLogoutConfirm(false)}
-                title={t('errors.logout_confirm_title')}
-            >
+            <Modal isOpen={showLogoutConfirm} onClose={() => setShowLogoutConfirm(false)} title={t('errors.logout_confirm_title')}>
                 <ModalText>{t('errors.logout_confirm_text')}</ModalText>
                 <ModalButtonContainer>
                     <ModalButton onClick={() => setShowLogoutConfirm(false)}>{t('errors.cancel_button')}</ModalButton>
@@ -277,69 +278,53 @@ const Sidebar = ({ isCollapsed, setIsCollapsed }) => {
                 </ModalButtonContainer>
             </Modal>
 
-             <SidebarContainer $isCollapsed={isCollapsed} dir={document.body.dir}>
+            <SidebarContainer $isCollapsed={isCollapsed} dir={document.body.dir}>
                 <TopSection $isCollapsed={isCollapsed}>
                     {!isCollapsed && <Logo src={logo} alt="SeekMyCourse Logo" />}
-                    <CollapseButton dir={document.body.dir} onClick={() => setIsCollapsed(!isCollapsed)}>
+                    <CollapseButton onClick={() => setIsCollapsed(!isCollapsed)}>
                         {isCollapsed ? <FiChevronsRight /> : <FiChevronsLeft />}
                     </CollapseButton>
                 </TopSection>
-
                 <MenuList>
                     {menuItems.map((item, index) => {
-                        if (item.type === 'separator') {
-                            return <Separator key={`sep-${index}`} />;
-                        }
-
+                        if (item.type === 'separator') return <Separator key={`sep-${index}`} />;
+                        if (item.action) return (
+                            <MenuItem key={item.nameKey}>
+                                <ActionButton onClick={item.action} $isCollapsed={isCollapsed} $variant={item.variant}>
+                                    {item.icon}
+                                    <MenuText $isCollapsed={isCollapsed}>{t(item.nameKey)}</MenuText>
+                                </ActionButton>
+                            </MenuItem>
+                        );
                         if (item.nameKey === 'sidebar.help_support') {
-                            return (
-                                <React.Fragment key={item.nameKey}>
-                                    <MenuItem>
-                                        <MenuItemButton onClick={() => setHelpMenuOpen(!isHelpMenuOpen)}>
-                                            {item.icon}
-                                            <MenuText $isCollapsed={isCollapsed}>{t(item.nameKey)}</MenuText>
-                                            <ChevronIcon $isOpen={isHelpMenuOpen} $isCollapsed={isCollapsed} />
-                                        </MenuItemButton>
-                                    </MenuItem>
-                                    
-                                    {isHelpMenuOpen && !isCollapsed && (
-                                        <SubMenu>
-                                          <MenuItem>
-                                            <StyledNavLink to="/knowledge-base">
-                                                <MenuText>Knowledge Base</MenuText>
-                                            </StyledNavLink>
-                                          </MenuItem>
-                                          <MenuItem>
-                                            <StyledNavLink to="/support-tickets">
-                                                <MenuText>Support Tickets</MenuText>
-                                            </StyledNavLink>
-                                          </MenuItem>
-                                        </SubMenu>
-                                    )}
-                                </React.Fragment>
-                            );
-                        }
-                        
-                        if (item.action) {
-                            return (
-                                <MenuItem key={item.nameKey}>
-                                    <ActionButton 
-                                        onClick={item.action} 
-                                        $isCollapsed={isCollapsed} 
-                                        $variant={item.variant}
-                                    >
+                          return (
+                            <React.Fragment key={item.nameKey}>
+                                <MenuItem>
+                                    <MenuItemButton onClick={() => setHelpMenuOpen(!isHelpMenuOpen)}>
                                         {item.icon}
                                         <MenuText $isCollapsed={isCollapsed}>{t(item.nameKey)}</MenuText>
-                                    </ActionButton>
+                                        <ChevronIcon $isOpen={isHelpMenuOpen} $isCollapsed={isCollapsed} />
+                                    </MenuItemButton>
                                 </MenuItem>
-                            );
+                                {isHelpMenuOpen && !isCollapsed && (
+                                    <SubMenu>
+                                      <MenuItem>
+                                        <StyledNavLink to="/knowledge-base"><MenuText>Knowledge Base</MenuText></StyledNavLink>
+                                      </MenuItem>
+                                      <MenuItem>
+                                        <StyledNavLink to="/support-tickets"><MenuText>Support Tickets</MenuText></StyledNavLink>
+                                      </MenuItem>
+                                    </SubMenu>
+                                )}
+                            </React.Fragment>
+                          );
                         }
-
                         return (
                             <MenuItem key={item.nameKey || item.path}>
                                 <StyledNavLink 
                                     to={item.path} 
                                     $isCollapsed={isCollapsed}
+                                    onClick={(e) => handleLinkClick(e, item.isProtected)}
                                 >
                                     {item.icon}
                                     <MenuText $isCollapsed={isCollapsed}>{t(item.nameKey)}</MenuText>

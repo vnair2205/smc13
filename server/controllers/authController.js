@@ -2,14 +2,15 @@
 const User = require('../models/User');
 const Course = require('../models/Course');
 const bcrypt = require('bcryptjs');
-const jwt =require('jsonwebtoken');
+const jwt = require('jsonwebtoken');
 const crypto = require('crypto');
 const nodemailer = require('nodemailer');
-const twilio = require('twilio');
+
 const useragent = require('useragent');
 const geoip = require('geoip-lite');
 const path = require('path');
 const fs = require('fs');
+const axios = require('axios');
 
 const getSessionDetails = (req) => {
     const agent = useragent.parse(req.headers['user-agent']);
@@ -19,11 +20,11 @@ const getSessionDetails = (req) => {
     return { ipAddress: ip, device: `${agent.toAgent()} on ${agent.os.toString()}`, location };
 };
 
-// NEW HELPER FUNCTION: To generate and send email OTP
+
 const generateAndSendEmailOtp = async (user, targetEmail) => {
     const otp = Math.floor(100000 + Math.random() * 900000).toString();
     user.emailOtp = otp;
-    user.emailOtpExpires = Date.now() + 10 * 60 * 1000; // 10 minutes
+    user.emailOtpExpires = Date.now() + 10 * 60 * 1000;
 
     const transporter = nodemailer.createTransport({
         service: 'gmail',
@@ -31,46 +32,245 @@ const generateAndSendEmailOtp = async (user, targetEmail) => {
     });
 
     const mailOptions = {
-        from: process.env.EMAIL_USER,
-        to: targetEmail, // Use the target email address
+        from: `SeekMyCourse <${process.env.EMAIL_USER}>`,
+        to: targetEmail,
         subject: 'Your OTP for SeekMyCourse',
-        text: `Your OTP is: ${otp}`,
+        text: `Your One-Time Password (OTP) is: ${otp}`,
     };
 
     await transporter.sendMail(mailOptions);
-    // The save will be handled by the calling function
 };
 
 
-exports.registerUser = async (req, res) => {
-    const { firstName, lastName, email, password, phoneNumber } = req.body;
-    try {
-        let userByEmail = await User.findOne({ email });
-        if (userByEmail) return res.status(400).json({ msgKey: 'errors.email_exists' });
-        
-        let userByPhone = await User.findOne({ phoneNumber });
-        if (userByPhone) return res.status(400).json({ msgKey: 'errors.phone_exists' });
 
-        const user = new User({ firstName, lastName, email, password, phoneNumber });
+const sendPhoneOtpWith2Factor = async (user, phoneNumber) => {
+    try {
+        const apiKey = process.env.TWOFACTOR_API_KEY;
+        const numericPhone = phoneNumber.replace(/\D/g, '');
+        const url = `https://2factor.in/API/V1/${apiKey}/SMS/${numericPhone}/AUTOGEN`;
+
+        const response = await axios.get(url);
+
+        if (response.data.Status === 'Success') {
+            // Save the session ID provided by 2Factor to the user model
+            user.phoneOtpSessionId = response.data.Details;
+            await user.save();
+            return { success: true };
+        } else {
+            console.error("2Factor API Error:", response.data.Details);
+            return { success: false, error: response.data.Details };
+        }
+    } catch (error) {
+        console.error('Error sending OTP via 2Factor:', error.response ? error.response.data : error.message);
+        return { success: false, error: 'Failed to send OTP due to a server error.' };
+    }
+};
+
+exports.registerUser = async (req, res) => {
+    const { firstName, lastName, email, password, phoneNumber, dateOfBirth, planId } = req.body;
+
+    try {
+        const existingVerifiedUser = await User.findOne({
+            $or: [{ email, isEmailVerified: true }, { phoneNumber, isPhoneVerified: true }]
+        });
+        if (existingVerifiedUser) {
+            return res.status(400).json({ msgKey: existingVerifiedUser.email === email ? 'errors.email_exists' : 'errors.phone_exists' });
+        }
+
+        let user = await User.findOne({ email });
+
+        if (user) {
+            user.firstName = firstName;
+            user.lastName = lastName;
+            user.password = password;
+            user.phoneNumber = phoneNumber;
+            user.dateOfBirth = dateOfBirth;
+            user.selectedPlan = planId;
+            user.subscriptionStatus = 'pending_payment';
+            user.isPhoneVerified = false;
+            user.isEmailVerified = false;
+        } else {
+            user = new User({
+                firstName, lastName, email, password, phoneNumber, dateOfBirth,
+                selectedPlan: planId,
+                subscriptionStatus: 'pending_payment'
+            });
+        }
+
         const salt = await bcrypt.genSalt(10);
         user.password = await bcrypt.hash(password, salt);
         await user.save();
 
-        const twilioClient = twilio(process.env.TWILIO_ACCOUNT_SID, process.env.TWILIO_AUTH_TOKEN);
-        await twilioClient.verify.v2.services(process.env.TWILIO_VERIFY_SERVICE_SID).verifications.create({ to: phoneNumber, channel: 'sms' });
-        
+        // 4. Send the phone verification OTP
+       const otpResult = await sendPhoneOtpWith2Factor(user, phoneNumber);
+
+        if (!otpResult.success) {
+            return res.status(500).json({ msgKey: 'errors.otp_failed_send' });
+        }
+
         res.status(201).json({ msg: 'Registration successful. Please verify your phone number.', email: user.email, phone: user.phoneNumber });
+
     } catch (err) {
         console.error('Registration Error:', err);
-        if (err.code === 21614) { // Twilio error code for invalid phone number
-            return res.status(400).json({ msgKey: 'errors.phone_invalid', context: { phoneNumber: err.message.match(/\+?\d{10,15}/)?.[0] || 'provided number' } });
-        } else if (err.code === 21612) { // Twilio error code for fraudulent phone number
-            const fraudulentPhoneNumber = err.message.match(/\+?\d{10,15}/)?.[0];
-            return res.status(400).json({ msgKey: 'errors.phone_fraudulent', context: { phoneNumber: fraudulentPhoneNumber } });
-        }
         res.status(500).json({ msgKey: 'errors.generic' });
     }
 };
+
+
+exports.resendSignupPhoneOtp = async (req, res) => {
+    const { phoneNumber } = req.body;
+    try {
+        const user = await User.findOne({ phoneNumber });
+        if (!user) return res.status(404).json({ msg: 'User not found.' });
+
+        // --- 4. REPLACE TWILIO with 2Factor ---
+        const otpResult = await sendPhoneOtpWith2Factor(user, phoneNumber);
+
+        if (!otpResult.success) {
+            return res.status(500).json({ msg: 'Failed to resend OTP.' });
+        }
+
+        res.status(200).json({ msg: 'A new OTP has been sent to your phone.' });
+    } catch (err) {
+        console.error('Resend Signup Phone OTP Error:', err);
+        res.status(500).json({ msg: 'Failed to resend OTP.' });
+    }
+};
+
+
+// *** NEW FUNCTION for verifying phone during signup ***
+exports.verifySignupPhone = async (req, res) => {
+    const { phoneNumber, otp } = req.body;
+    try {
+        const user = await User.findOne({ phoneNumber });
+        if (!user || !user.phoneOtpSessionId) {
+            return res.status(404).json({ msg: 'Verification session not found. Please try signing up again.' });
+        }
+        
+        // --- 5. REPLACE TWILIO with 2Factor verification ---
+        const apiKey = process.env.TWOFACTOR_API_KEY;
+        const url = `https://2factor.in/API/V1/${apiKey}/SMS/VERIFY/${user.phoneOtpSessionId}/${otp}`;
+        
+        const response = await axios.get(url);
+
+        if (response.data.Status === 'Success') {
+            user.isPhoneVerified = true;
+            user.phoneOtpSessionId = undefined; // Clear the session ID after successful verification
+            await generateAndSendEmailOtp(user, user.email);
+            await user.save();
+            res.json({ msg: 'Phone verified successfully. Please check your email for the next OTP.' });
+        } else {
+            res.status(400).json({ msg: 'Invalid phone OTP.' });
+        }
+    } catch (err) {
+        console.error('Signup Phone Verification Error:', err);
+        res.status(500).send('Server error');
+    }
+};
+// *** NEW FUNCTION for verifying email and finalizing signup ***
+exports.verifySignupEmail = async (req, res) => {
+    const { email, otp } = req.body;
+    try {
+        const user = await User.findOne({ email });
+        if (!user) return res.status(404).json({ msg: 'User not found. Please try signing up again.' });
+        if (!user.isPhoneVerified) return res.status(400).json({ msg: 'Please verify your phone number first.' });
+        if (user.emailOtp !== otp || user.emailOtpExpires < Date.now()) {
+            return res.status(400).json({ msg: 'Invalid or expired email OTP.' });
+        }
+
+        user.isEmailVerified = true;
+        user.emailOtp = undefined;
+        user.emailOtpExpires = undefined;
+
+        // Final step: Log the user in by creating their token
+        const payload = { user: { id: user.id } };
+        const token = jwt.sign(payload, process.env.JWT_SECRET, { expiresIn: '5h' });
+        user.activeSession = { token, ...getSessionDetails(req) };
+        await user.save();
+
+        // --- THE FIX IS HERE ---
+        // We must send the token back to the client so it can be stored and used for the next request.
+        res.json({ 
+            msg: 'Email verified successfully. Proceed to payment.',
+            token: token // <-- THIS LINE IS CRITICAL
+        });
+        
+   } catch (err) {
+        console.error('Signup Email Verification Error:', err);
+        res.status(500).send('Server error');
+    }
+};
+
+exports.resendSignupEmailOtp = async (req, res) => {
+    const { email } = req.body;
+    try {
+        const user = await User.findOne({ email });
+        if (!user) return res.status(404).json({ msg: 'User not found.' });
+        if (!user.isPhoneVerified) return res.status(400).json({ msg: 'Phone not verified yet.' });
+        
+        await generateAndSendEmailOtp(user, email);
+        await user.save(); // Save the new OTP
+        
+        res.status(200).json({ msg: 'A new OTP has been sent to your email.' });
+    } catch (err) {
+        console.error('Resend Signup Email OTP Error:', err);
+        res.status(500).json({ msg: 'Failed to resend OTP.' });
+    }
+};
+
+
+
+// --- *** NEW FUNCTIONS TO CHANGE CONTACT INFO DURING SIGNUP *** ---
+
+exports.changeSignupPhone = async (req, res) => {
+    const { oldPhoneNumber, newPhoneNumber, email } = req.body;
+    try {
+        const existingUser = await User.findOne({ phoneNumber: newPhoneNumber, isPhoneVerified: true });
+        if (existingUser) {
+            return res.status(400).json({ msg: 'This phone number is already registered.' });
+        }
+        const user = await User.findOne({ $or: [{ email }, { phoneNumber: oldPhoneNumber }] });
+        if (!user) {
+            return res.status(404).json({ msg: 'User not found.' });
+        }
+        user.phoneNumber = newPhoneNumber;
+        await user.save();
+        
+        // --- 6. REPLACE TWILIO with 2Factor ---
+        const otpResult = await sendPhoneOtpWith2Factor(user, newPhoneNumber);
+
+        if (!otpResult.success) {
+            return res.status(500).json({ msg: 'Failed to update phone number and send OTP.' });
+        }
+        
+        res.status(200).json({ msg: 'OTP sent to new phone number.' });
+    } catch (err) {
+        console.error('Change Signup Phone Error:', err);
+        res.status(500).json({ msg: 'Failed to update phone number.' });
+    }
+};
+
+exports.changeSignupEmail = async (req, res) => {
+    const { oldEmail, newEmail } = req.body;
+    try {
+        const existingUser = await User.findOne({ email: newEmail, isEmailVerified: true });
+        if (existingUser) {
+            return res.status(400).json({ msg: 'This email is already registered.' });
+        }
+        const user = await User.findOne({ email: oldEmail });
+        if (!user) {
+            return res.status(404).json({ msg: 'User not found.' });
+        }
+        user.email = newEmail;
+        await generateAndSendEmailOtp(user, newEmail);
+        await user.save();
+        res.status(200).json({ msg: 'OTP sent to new email address.' });
+    } catch (err) {
+        console.error('Change Signup Email Error:', err);
+        res.status(500).json({ msg: 'Failed to update email.' });
+    }
+};
+
 
 exports.verifyPhoneOtp = async (req, res) => {
     const { otp } = req.body;
@@ -160,38 +360,63 @@ exports.loginUser = async (req, res) => {
     const { email, password } = req.body;
     try {
         const user = await User.findOne({ email });
-        if (!user) return res.status(400).json({ msgKey: 'errors.invalid_credentials' });
-
-        const isMatch = await bcrypt.compare(password, user.password);
-        if (!isMatch) return res.status(400).json({ msgKey: 'errors.invalid_credentials' });
-
-        if (user.activeSession) {
-            try {
-                jwt.verify(user.activeSession.token, process.env.JWT_SECRET);
-                return res.status(409).json({
-                    msgKey: 'errors.session_conflict',
-                    activeSession: user.activeSession
-                });
-            } catch (jwtError) {
-                user.activeSession = undefined;
-                await user.save();
-                console.log('[Login] Expired/Invalid session token found and cleared.');
-            }
+        if (!user) {
+            return res.status(400).json({ msg: 'Invalid credentials' });
         }
 
-       const payload = { user: { id: user.id } };
-    const token = jwt.sign(payload, process.env.JWT_SECRET, { expiresIn: '5h' });
+        const isMatch = await bcrypt.compare(password, user.password);
+        if (!isMatch) {
+            return res.status(400).json({ msg: 'Invalid credentials' });
+        }
 
-    user.activeSession = { token, ...getSessionDetails(req) };
+        if (!user.isEmailVerified) {
+            return res.status(401).json({
+                msg: 'Please verify your email to login.',
+                verificationRequired: 'email'
+            });
+        }
 
-    await user.save(); 
+        if (!user.isPhoneVerified) {
+            return res.status(401).json({
+                msg: 'Please verify your phone to login.',
+                verificationRequired: 'phone'
+            });
+        }
+
+        const payload = {
+            user: {
+                id: user.id,
+                role: user.role,
+            },
+        };
+
+        const token = jwt.sign(payload, process.env.JWT_SECRET, { expiresIn: '5h' });
+
+        const sessionDetails = getSessionDetails(req);
+        const newSession = {
+            ...sessionDetails,
+            token: token,
+        };
+
+        // --- FIX STARTS HERE ---
+
+        // 1. Set the user's active session to the new session
+        user.activeSession = newSession;
+
+        // 2. Push the new session to the session history array
+        user.sessions.push(newSession);
+        
+        // --- FIX ENDS HERE ---
+
+        await user.save();
+
         res.json({ token });
+
     } catch (err) {
         console.error(err.message);
-        res.status(500).json({ msgKey: 'errors.generic' });
+        res.status(500).send('Server error');
     }
 };
-
 
 exports.verifyEmail = async (req, res) => {
     const { otp } = req.body;
@@ -573,9 +798,9 @@ exports.updateLearnsProfile = async (req, res) => {
         const user = await User.findById(req.user.id);
 
         if (!user) {
-            return res.status(404).json({ msgKey: 'errors.user_not_found' });
+            return res.status(404).json({ msg: 'User not found' });
         }
-        
+
         user.learningGoals = learningGoals;
         user.experienceLevel = experienceLevel;
         user.areasOfInterest = areasOfInterest;
@@ -590,7 +815,6 @@ exports.updateLearnsProfile = async (req, res) => {
     }
 };
 
-// --- NEW FUNCTION: Upload Profile Picture ---
 exports.uploadProfilePicture = async (req, res) => {
     try {
         const user = await User.findById(req.user.id);
@@ -598,21 +822,20 @@ exports.uploadProfilePicture = async (req, res) => {
             return res.status(404).json({ msg: 'User not found' });
         }
 
-        // Assuming file is uploaded and available via req.file (e.g., using multer)
-        // For now, this is a placeholder. A proper file upload setup (like Multer and an S3 bucket) is required.
         if (!req.file) {
             return res.status(400).json({ msg: 'No file uploaded' });
         }
         
-        // This is a placeholder. In a real-world scenario, you'd upload the file
-        // to a service like AWS S3 or Cloudinary and save the public URL.
         const fileUrl = `${req.protocol}://${req.get('host')}/uploads/${req.file.filename}`;
         user.profilePicture = fileUrl;
         await user.save();
 
-        res.status(200).json({ msg: 'Profile picture updated successfully', profilePictureUrl: fileUrl });
+        res.status(200).json({ 
+            msg: 'Profile picture updated successfully', 
+            profilePicture: user.profilePicture 
+        });
     } catch (err) {
-        console.error("Error uploading profile picture:", err);
-        res.status(500).json({ msg: 'Server Error' });
+        console.error('Error uploading profile picture:', err);
+        res.status(500).json({ msg: 'Server error' });
     }
 };

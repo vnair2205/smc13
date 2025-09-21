@@ -6,6 +6,7 @@ const Chat = require('../models/Chat');
 const axios = require('axios');
 const puppeteer = require('puppeteer');
 const mongoose = require('mongoose');
+const User = require('../models/User');
 
 
 const cleanAIText = (text) => {
@@ -134,14 +135,50 @@ exports.generateObjective = async (req, res) => {
     const { topic, englishTopic, language, languageName, nativeName } = req.body;
     const userId = req.user.id;
     if (!topic || !englishTopic) return res.status(400).json({ msg: 'Topic and English topic are required' });
+    
     try {
-        // Generate objectives in the native language
+        // --- ROBUST QUOTA CHECK STARTS HERE ---
+        const user = await User.findById(userId).populate({
+            path: 'activeSubscription',
+            populate: {
+                path: 'plan',
+                model: 'SubscriptionPlan'
+            }
+        });
+
+        if (!user) {
+            return res.status(404).json({ msg: 'User not found.' });
+        }
+
+        // Check if user has an active plan
+        if (!user.activeSubscription || !user.activeSubscription.plan) {
+            console.log(`[Quota] User ${user.email} has no active plan. Denying creation.`);
+            return res.status(403).json({ msgKey: 'errors.no_active_plan' });
+        }
+
+        const subscriptionStartDate = user.activeSubscription.startDate;
+        const planQuota = user.activeSubscription.plan.coursesPerMonth;
+
+        // Count courses created by the user within the current billing period
+        const coursesGeneratedThisCycle = await Course.countDocuments({
+            user: userId,
+            createdAt: { $gte: subscriptionStartDate }
+        });
+
+        console.log(`[Quota] User: ${user.email}, Plan Quota: ${planQuota}, Courses Generated This Cycle: ${coursesGeneratedThisCycle}`);
+
+        if (coursesGeneratedThisCycle >= planQuota) {
+            console.log(`[Quota] User ${user.email} has reached their quota. Denying creation.`);
+            return res.status(403).json({ msgKey: 'errors.quota_exceeded' });
+        }
+        // --- ROBUST QUOTA CHECK ENDS HERE ---
+
+        // If the check passes, proceed with course creation...
         const nativePrompt = `Generate 4-5 learning objectives for a course on: "${topic}". The response must be in a numbered list format in the ${languageName} (${nativeName}) language.`;
         console.log('[AI] Generating course objectives in native language...');
         const nativeRawText = await generateWithFallback(nativePrompt);
         const cleanedObjectives = cleanAIText(nativeRawText);
 
-        // Generate objectives in English
         const englishPrompt = `Generate the exact same 4-5 learning objectives for a course on: "${englishTopic}", but in the English language. The response must be a numbered list.`;
         console.log('[AI] Generating course objectives in English...');
         const englishRawText = await generateWithFallback(englishPrompt);
@@ -155,7 +192,7 @@ exports.generateObjective = async (req, res) => {
             topic,
             englishTopic,
             objective: cleanedObjectives,
-            englishObjective: cleanedEnglishObjectives, // Save English version
+            englishObjective: cleanedEnglishObjectives,
             language,
             languageName,
             nativeName,
@@ -163,13 +200,16 @@ exports.generateObjective = async (req, res) => {
         });
         await newCourse.save();
         console.log('[DB] Course created with ID:', newCourse._id);
+
         res.json({ objective: cleanedObjectives, courseId: newCourse._id });
+
     } catch (error) {
         console.error("--- ERROR IN generateObjective ---", error);
         res.status(500).json({ msgKey: "errors.generic" });
     }
 };
 
+// (The rest of your file remains exactly the same)
 exports.refineSingleObjective = async (req, res) => {
     console.log('[API] /refine-objective called');
     const { courseId, newObjectiveText } = req.body;
@@ -206,13 +246,11 @@ exports.generateOutcome = async (req, res) => {
     try {
         const objectivesString = objective.join('; ');
 
-        // Generate outcomes in the native language
         const nativePrompt = `Based on topic "${topic}" and objectives "${objectivesString}", generate 4-5 learning outcomes. The response must be in a numbered list format in the ${languageName} (${nativeName}) language.`;
         console.log('[AI] Generating course outcomes in native language...');
         const nativeRawText = await generateWithFallback(nativePrompt);
         const cleanedNativeText = cleanAIText(nativeRawText).join('\n');
 
-        // Generate outcomes in English
         const englishPrompt = `Based on topic "${englishTopic}" and objectives "${objectivesString}", generate the exact same 4-5 learning outcomes, but in the English language. The response must be a numbered list.`;
         console.log('[AI] Generating course outcomes in English...');
         const englishRawText = await generateWithFallback(englishPrompt);
@@ -221,7 +259,7 @@ exports.generateOutcome = async (req, res) => {
         console.log('[DB] Updating course with bilingual outcomes...');
         const course = await Course.findByIdAndUpdate(courseId, { 
             outcome: cleanedNativeText,
-            englishOutcome: cleanedEnglishText // Save English version
+            englishOutcome: cleanedEnglishText
         }, { new: true });
 
         if (!course) return res.status(404).json({ msg: 'Course not found' });
@@ -382,10 +420,10 @@ exports.generateLessonContent = async (req, res) => {
             try {
                const apiKey = getNextYoutubeKey();
             const englishCourseTopic = course.englishTopic || course.topic;
-            const englishSubtopicTitle = subtopic.englishTitle || subtopic.title;
+            const englishSubtopicTitle = subtopic.englishTitle || sub.title;
             const englishLessonTitle = lesson.englishTitle || lesson.title;
 
-                const searchQuery = encodeURIComponent(`${englishCourseTopic} ${englishSubtopicTitle} ${englishLessonTitle} tutorial`);
+               const searchQuery = encodeURIComponent(`${englishCourseTopic} ${englishSubtopicTitle} ${englishLessonTitle} tutorial`);
             const youtubeApiUrl = `https://www.googleapis.com/youtube/v3/search?part=snippet&q=${searchQuery}&type=video&videoEmbeddable=true&maxResults=10&key=${apiKey}&relevanceLanguage=en&videoDuration=medium`;
                 
                   console.log(`[YouTube] Searching with improved query: "${searchQuery}"`);
@@ -419,21 +457,21 @@ exports.generateLessonContent = async (req, res) => {
             Start with a friendly and encouraging welcome that sets the stage for the lesson. Briefly introduce the topic and why it is important for the overall course.
 
             ### Understanding ${lesson.title}
-    Provide a comprehensive explanation of the topic.
-    - Break down complex ideas into clear, digestible paragraphs.
-    - Use bullet points or numbered lists to present key concepts and facts.
-    - Include concrete, real-world examples to illustrate the concepts.
-    - Explain any technical jargon or new terms simply and clearly.
+           Provide a comprehensive explanation of the topic.
+           - Break down complex ideas into clear, digestible paragraphs.
+           - Use bullet points or numbered lists to present key concepts and facts.
+           - Include concrete, real-world examples to illustrate the concepts.
+           - Explain any technical jargon or new terms simply and clearly.
 
             ### Practice Assignment: Self-Assessment
-    Create a practical, self-contained assignment. The user should be able to complete this on their own to apply what they've learned. Provide clear, step-by-step instructions.
+           Create a practical, self-contained assignment. The user should be able to complete this on their own to apply what they've learned. Provide clear, step-by-step instructions.
 
 
-          ### Self-Evaluation Criteria
-    Give the learner a simple rubric or a list of criteria to help them evaluate their own work. This should empower them to judge their understanding without needing a formal instructor.
+            ### Self-Evaluation Criteria
+           Give the learner a simple rubric or a list of criteria to help them evaluate their own work. This should empower them to judge their understanding without needing a formal instructor.
 
-    ### Key Takeaways
-    End the lesson with a concise summary of the most important points. This will help the user quickly review the material and reinforce their learning.
+           ### Key Takeaways
+           End the lesson with a concise summary of the most important points. This will help the user quickly review the material and reinforce their learning.
 
              All content must be well-structured and written entirely in the ${course.languageName} (${course.nativeName}) language.
             `;
@@ -450,7 +488,7 @@ exports.generateLessonContent = async (req, res) => {
             lesson.videoChangeCount = 0;
             lesson.isCompleted = true;
             await course.save();
-              res.json(lesson);
+               res.json(lesson);
 
         } else if (!lesson.isCompleted) {
             lesson.isCompleted = true;
@@ -521,7 +559,6 @@ exports.changeLessonVideo = async (req, res) => {
         const englishSubtopicTitle = subtopic.englishTitle || subtopic.title;
         const englishLessonTitle = lesson.englishTitle || lesson.title;
 
-        // --- THIS IS THE UPDATED, MORE SPECIFIC SEARCH QUERY ---
         const searchQuery = encodeURIComponent(`${englishCourseTopic} ${englishSubtopicTitle} ${englishLessonTitle} tutorial`);
         const youtubeApiUrl = `https://www.googleapis.com/youtube/v3/search?part=snippet&q=${searchQuery}&type=video&videoEmbeddable=true&maxResults=10&key=${apiKey}&relevanceLanguage=en&videoDuration=medium`;
 
@@ -567,7 +604,7 @@ exports.getChatHistory = async (req, res) => {
 
         if (!chat) {
             console.log('[DB] No chat history found for this course and user.');
-            return res.json([]); // Return empty array if no history
+            return res.json([]);
         }
 
         console.log('[DB] Chat history retrieved successfully.');
@@ -589,7 +626,6 @@ exports.getChatbotResponse = async (req, res) => {
             return res.status(404).json({ msg: 'Course not found' });
         }
 
-        // --- Start of AI Prompt Generation (same as before) ---
         let fullPrompt = `You are an AI Tutor named TANISI for a course on "${course.topic}". A student has asked: "${userQuery}".`;
         
         if (chatHistory && chatHistory.length > 0) {
@@ -606,21 +642,17 @@ exports.getChatbotResponse = async (req, res) => {
         console.log('[AI] Generating chatbot response with full context...');
         const rawText = await generateWithFallback(fullPrompt);
         console.log('[AI] Chatbot response generated.');
-        // --- End of AI Prompt Generation ---
 
-        // --- New Database Save Logic ---
         console.log('[DB] Saving chat messages to database...');
         const userMessage = { text: userQuery, isUser: true, timestamp: new Date() };
         const aiMessage = { text: rawText, isUser: false, timestamp: new Date() };
 
-        // Find the chat document or create a new one if it doesn't exist
         await Chat.findOneAndUpdate(
             { course: courseId, user: userId },
             { $push: { messages: { $each: [userMessage, aiMessage] } } },
             { upsert: true, new: true }
         );
         console.log('[DB] Chat messages saved successfully.');
-        // --- End of New Database Save Logic ---
 
         res.json({ response: rawText });
     } catch (error) {
@@ -754,23 +786,10 @@ exports.completeQuiz = async (req, res) => {
     }
 };
 
-// server/controllers/courseController.js
-
 exports.getUsersCourses = async (req, res) => {
     console.log('[API] /courses called');
     const userId = req.user.id;
-    
-    // --- THIS IS THE FIX ---
-    // Destructure the new 'courseType' filter from the query
-    const { 
-        page = 1, 
-        limit = 20, 
-        search = '', 
-        sortBy = 'newest', 
-        status = 'all', 
-        certified,
-        courseType = 'all' // Add courseType with a default value of 'all'
-    } = req.query;
+    const { page = 1, limit = 20, search = '', sortBy = 'newest', status = 'all', certified } = req.query;
 
     const query = { user: userId };
     const options = {
@@ -794,17 +813,6 @@ exports.getUsersCourses = async (req, res) => {
     } else if (status !== 'all') {
         query.status = status;
     }
-
-    // --- NEW FILTER LOGIC ---
-    // Modify the query based on the courseType parameter
-    if (courseType === 'user-generated') {
-        // Find courses where preGenCourseOrigin does NOT exist or is null
-        query.preGenCourseOrigin = { $exists: false };
-    } else if (courseType === 'pre-generated') {
-        // Find courses where preGenCourseOrigin DOES exist
-        query.preGenCourseOrigin = { $exists: true };
-    }
-    // If courseType is 'all', we don't add any conditions, so it fetches everything.
 
     if (sortBy === 'newest') {
         options.sort.createdAt = -1;
@@ -983,7 +991,6 @@ exports.getVerificationData = async (req, res) => {
         const score = course.score || 0;
         const percentage = totalQuestions > 0 ? (score / totalQuestions) * 100 : 0;
         
-        // Use English versions with fallbacks for older courses
         const objectiveString = Array.isArray(course.englishObjective) && course.englishObjective.length > 0 
             ? course.englishObjective.join('\n') 
             : (Array.isArray(course.objective) ? course.objective.join('\n') : course.objective);
@@ -1008,14 +1015,12 @@ exports.getVerificationData = async (req, res) => {
                 topic: course.englishTopic || course.topic,
                 objective: objectiveString,
                 outcome: course.englishOutcome || course.outcome,
-                index: englishIndex, // Use the processed English index
+                index: englishIndex,
                 startDate: course.createdAt,
                 completionDate: course.completionDate || new Date(),
                 percentageScored: percentage.toFixed(2)
             }
         };
-
-        
 
         res.json(verificationData);
 
@@ -1023,16 +1028,4 @@ exports.getVerificationData = async (req, res) => {
         console.error("Error fetching verification data:", error.message);
         res.status(500).json({ msgKey: "errors.generic" });
     }
-
-    
 };
-
-
-// This makes sure all your existing route handlers continue to work
-Object.assign(module.exports, exports);
-
-// This specifically shares the helper functions we need
-module.exports.cleanAIText = cleanAIText;
-module.exports.cleanSingleLine = cleanSingleLine;
-module.exports.fetchCourseThumbnail = fetchCourseThumbnail;
-module.exports.findBestVideo = findBestVideo;
