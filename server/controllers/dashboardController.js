@@ -23,7 +23,17 @@ exports.getWelcomeData = async (req, res) => {
         if (user.activeSubscription) {
             const subscription = await Subscription.findById(user.activeSubscription).populate('plan');
             if (subscription && subscription.plan) {
-                const coursesGenerated = subscription.coursesGenerated || 0;
+                
+                // --- THIS IS THE FIX ---
+                // We now count the courses created within the subscription period for an accurate number.
+                const coursesGenerated = await Course.countDocuments({
+                    user: req.user.id,
+                    createdAt: {
+                        $gte: subscription.startDate,
+                        $lte: subscription.endDate
+                    }
+                });
+
                 const courseLimit = subscription.plan.coursesPerMonth || 0;
 
                 subscriptionData = {
@@ -60,11 +70,9 @@ exports.getProgressData = async (req, res) => {
         const pregeneratedCoursesAccessed = allUserCourses.filter(course => course.preGenCourseOrigin != null).length;
 
         // Calculate counts from the fetched data, which is more reliable
-        const inProgressCourses = allUserCourses.filter(course => 
-            (course.status === 'published' || course.status === 'archived')
-        ).length;
+        const inProgressCourses = allUserCourses.filter(course => course.status === 'Active').length;
         
-        const completedCourses = allUserCourses.filter(course => course.status === 'completed').length;
+        const completedCourses = allUserCourses.filter(course => course.status === 'Completed').length;
 
         res.json({
             totalCoursesGenerated,
