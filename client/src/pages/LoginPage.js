@@ -138,6 +138,27 @@ const SignUpText = styled.p`
   color: ${({ theme }) => theme.colors.textSecondary};
 `;
 
+// --- START: NEW STYLED COMPONENT ---
+const FooterText = styled.div`
+  text-align: center;
+  margin-top: 3rem;
+  color: ${({ theme }) => theme.colors.textSecondary};
+  font-size: 0.875rem;
+
+  p {
+    margin: 0.5rem 0;
+  }
+
+  a {
+    color: ${({ theme }) => theme.colors.primary};
+    text-decoration: none;
+    &:hover {
+      text-decoration: underline;
+    }
+  }
+`;
+// --- END: NEW STYLED COMPONENT ---
+
 // --- Component ---
 const LoginPage = () => {
   const { t } = useTranslation();
@@ -248,6 +269,10 @@ const LoginPage = () => {
             {t('no_account')}{' '}
             <Link to="/signup">{t('signup_link')}</Link>
         </SignUpText>
+         <FooterText>
+            <p>Having trouble logging in? <a href="mailto:support@seekmycourse.com">support@seekmycourse.com</a></p>
+            <p>&copy; {new Date().getFullYear()} SeekMyCourse AI Technologies Pvt Ltd.</p>
+        </FooterText>
       </FormContainer>
       <BannerContainer />
     </PageContainer>

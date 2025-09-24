@@ -13,7 +13,7 @@ import Preloader from '../common/Preloader';
 import LanguageSwitcher from '../common/LanguageSwitcher';
 import { Modal, ModalText, ModalButtonContainer, ModalButton } from '../common/Modal';
 
-// --- Styled Components (Copied from your original SignupPage.js) ---
+// --- Styled Components ---
 const FormContainer = styled.div`
   width: 500px;
   max-width: 100%;
@@ -25,7 +25,17 @@ const FormContainer = styled.div`
   background-color: #2a2a38;
   border-radius: 12px;
   border: 1px solid #3c3c4c;
+
+  // --- START: RESPONSIVE FIX ---
+  @media (max-width: 768px) {
+    background-color: transparent;
+    border: none;
+    padding: 0;
+    width: 100%;
+  }
+  // --- END: RESPONSIVE FIX ---
 `;
+
 const BackButton = styled.button`
     background: none;
     border: none;
@@ -36,6 +46,26 @@ const BackButton = styled.button`
     margin-bottom: 1rem;
     padding: 0;
 `;
+
+const FooterText = styled.div`
+  text-align: center;
+  margin-top: 3rem;
+  color: ${({ theme }) => theme.colors.textSecondary};
+  font-size: 0.875rem;
+
+  p {
+    margin: 0.5rem 0;
+  }
+
+  a {
+    color: ${({ theme }) => theme.colors.primary};
+    text-decoration: none;
+    &:hover {
+      text-decoration: underline;
+    }
+  }
+`;
+
 const Logo = styled.img` width: 180px; margin-bottom: 1.5rem; `;
 const Title = styled.h1` font-size: 2rem; margin-bottom: 0.5rem; color: ${({ theme }) => theme.colors.text}; text-align: center; `;
 const Subtitle = styled.p` font-size: 1rem; color: ${({ theme }) => theme.colors.textSecondary}; margin-bottom: 1rem; text-align: center; span { color: ${({ theme }) => theme.colors.primary}; font-weight: bold; }`;
@@ -55,11 +85,10 @@ const DatePickerWrapper = styled.div` width: 100%; .react-datepicker-wrapper, .r
 const PhoneInputWrapper = styled.div` .PhoneInput { --react-phone-number-input-height: 48px; .PhoneInputInput { height: var(--react-phone-number-input-height); padding: 0.9rem; background-color: #fff; border: 1px solid #ddd; border-radius: 8px; font-size: 1rem; color: #333; box-sizing: border-box; &:focus { outline: none; border-color: ${({ theme }) => theme.colors.primary}; } } .PhoneInputCountry { background-color: #f0f0f0; border: 1px solid #ddd; border-right: none; border-top-left-radius: 8px; border-bottom-left-radius: 8px; height: var(--react-phone-number-input-height); display: flex; align-items: center; box-sizing: border-box; min-width: 95px; padding: 0 1rem; } .PhoneInputCountrySelectArrow { opacity: 1; color: #333; } }`;
 const DatePickerCustomInput = forwardRef(({ value, onClick, placeholder }, ref) => (<Input onClick={onClick} ref={ref} value={value} placeholder={placeholder} readOnly hasIcon />));
 
-const RegistrationForm = ({ plan, onBack }) => {
+const RegistrationForm = ({ plan, onBack, onFormSubmit }) => {
     const { t } = useTranslation();
     const navigate = useNavigate();
     
-    // --- FIX: Added all necessary state definitions ---
     const [formData, setFormData] = useState({
         firstName: '',
         lastName: '',
@@ -91,8 +120,31 @@ const RegistrationForm = ({ plan, onBack }) => {
         }
     };
 
-    const handleEmailBlur = async () => { /* ... (Your existing function) ... */ };
-    const handlePhoneBlur = async () => { /* ... (Your existing function) ... */ };
+    const handleEmailBlur = async () => {
+        if (email && !errors.email) {
+            try {
+                const res = await axios.post('/api/auth/check-email', { email });
+                if (res.data.exists) {
+                    setErrors(prev => ({ ...prev, email: t('errors.email_exists') }));
+                }
+            } catch (err) {
+                console.error("Error checking email:", err);
+            }
+        }
+    };
+
+    const handlePhoneBlur = async () => {
+        if (phoneNumber && !errors.phoneNumber) {
+            try {
+                const res = await axios.post('/api/auth/check-phone', { phoneNumber });
+                if (res.data.exists) {
+                    setErrors(prev => ({ ...prev, phoneNumber: t('errors.phone_exists') }));
+                }
+            } catch (err) {
+                 console.error("Error checking phone:", err);
+            }
+        }
+    };
     
     const validateForm = () => {
         const newErrors = {};
@@ -200,7 +252,7 @@ const RegistrationForm = ({ plan, onBack }) => {
                     <Checkbox type="checkbox" name="agreed" checked={agreed} onChange={onChange} />
                     <CheckboxLabel>
                         <Trans i18nKey="agree_terms">
-                            I agree to the <a href="/public/terms-of-service" target="_blank" rel="noopener noreferrer">Terms of Service</a> & <a href="/public/privacy-policy" target="_blank" rel="noopener noreferrer">Privacy Policy</a>
+                            I agree to the <a href="/terms-of-service" target="_blank" rel="noopener noreferrer">Terms of Service</a> & <a href="/privacy-policy" target="_blank" rel="noopener noreferrer">Privacy Policy</a>
                         </Trans>
                     </CheckboxLabel>
                 </CheckboxContainer>
@@ -212,6 +264,10 @@ const RegistrationForm = ({ plan, onBack }) => {
                     Already have an account? <Link to="/login">Sign In</Link>
                 </Trans>
             </SignInText>
+            <FooterText>
+                    <p>Having trouble signing up? <a href="mailto:support@seekmycourse.com">support@seekmycourse.com</a></p>
+                    <p>&copy; {new Date().getFullYear()} SeekMyCourse AI Technologies Pvt Ltd.</p>
+                </FooterText>
         </FormContainer>
     );
 };

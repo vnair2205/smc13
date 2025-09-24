@@ -19,6 +19,28 @@ const LoadingText = styled.p`
     font-size: 1.2rem;
 `;
 
+// --- START: NEW STYLED COMPONENT ---
+const FooterText = styled.div`
+  text-align: center;
+  margin-top: 3rem;
+  color: ${({ theme }) => theme.colors.textSecondary};
+  font-size: 0.875rem;
+
+  p {
+    margin: 0.5rem 0;
+  }
+
+  a {
+    color: ${({ theme }) => theme.colors.primary};
+    text-decoration: none;
+    &:hover {
+      text-decoration: underline;
+    }
+  }
+`;
+// --- END: NEW STYLED COMPONENT ---
+
+
 const SignupPage = () => {
     const [step, setStep] = useState(1); // 1: Plan Selection, 2: Registration Form
     const [plans, setPlans] = useState([]);
@@ -61,6 +83,8 @@ const SignupPage = () => {
         <SignupPageContainer>
             {step === 1 && <PlanSelection plans={plans} onSelect={handlePlanSelect} />}
             {step === 2 && <RegistrationForm plan={selectedPlan} onBack={handleBack} />}
+
+            
         </SignupPageContainer>
     );
 };
