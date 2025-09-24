@@ -8,8 +8,8 @@ const sendEmail = require('../utils/sendEmail');
 // @route   POST /api/support
 // @access  Private
 exports.createTicketForUser = async (req, res) => {
-    // Note: 'description' from the old form is now 'message'
-    const { category, subject, message, priority } = req.body;
+    // --- FIX: Change 'message' to 'description' to match the frontend form ---
+    const { category, subject, description, priority } = req.body;
 
     try {
         const user = await User.findById(req.user.id);
@@ -18,10 +18,11 @@ exports.createTicketForUser = async (req, res) => {
         }
 
         const newTicket = new SupportTicket({
-            user: req.user.id, // Automatically associate the ticket with the logged-in user
+            user: req.user.id,
             category,
             subject,
-            description: message, // Map 'message' from form to 'description' in model
+            // --- FIX: Use 'description' directly from the request body ---
+            description: description, 
             priority,
             attachments: req.files ? req.files.map(file => ({
                 fileName: file.originalname,
@@ -32,7 +33,7 @@ exports.createTicketForUser = async (req, res) => {
 
         const ticket = await newTicket.save();
 
-        // --- Email Notification Logic (Restored) ---
+        // --- Email Notification Logic (No changes here) ---
         await sendEmail({
             to: user.email,
             subject: `Ticket #${ticket.ticketNumber} Created Successfully`,
