@@ -537,18 +537,18 @@ exports.getCourseForUser = async (req, res) => {
 // FIX: Add "exports." here as well
 exports.getChatForUserCourse = async (req, res) => {
   try {
-    const chat = await Chat.findOne({
-      course: req.params.courseId,
-      user: req.params.userId
-    });
+    const { userId, courseId } = req.params;
+
+    const chat = await Chat.findOne({ user: userId, course: courseId });
 
     if (!chat) {
-      return res.json([]); 
+      // If no chat is found, return an empty array, not an error
+      return res.json([]);
     }
 
     res.json(chat.messages);
   } catch (error) {
-    console.error(error.message);
+    console.error('Error fetching chat for user course:', error);
     res.status(500).send('Server Error');
   }
 };
