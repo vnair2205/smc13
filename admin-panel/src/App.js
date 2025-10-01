@@ -40,6 +40,7 @@ import AdminCourseViewPage from './pages/AdminCourseViewPage';
 import AdminCourseLayout from './components/layout/course/AdminCourseLayout';
 import InstitutionalSubscriptionPlansPage from './pages/InstitutionalSubscriptionPlansPage';
 import InstitutionalUserManagementPage from './pages/InstitutionalUserManagementPage';
+import InstituteDetailPage from './pages/InstituteDetailPage';
 
 
 
@@ -88,6 +89,7 @@ function App() {
 
              <Route path="/institutional-subscription-plans" element={<AdminProtectedRoute><InstitutionalSubscriptionPlansPage /></AdminProtectedRoute>} />
              <Route path="/institutional-user-management" element={<AdminProtectedRoute><InstitutionalUserManagementPage /></AdminProtectedRoute>} />
+             <Route path="/institute/:id" element={<InstituteDetailPage />} />
            {/* --- END OF NEW ROUTES --- */}
            <Route 
             path="/admin/course-player/:id/lesson/:subtopicId/:lessonId" 
