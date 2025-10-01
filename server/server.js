@@ -13,6 +13,7 @@ const Message = require('./models/Message');
 const StudyGroup = require('./models/StudyGroup');
 const User = require('./models/User');
 const legalRoutes = require('./routes/legalRoutes');
+const instituteAdminRoutes = require('./routes/instituteAdminRoutes');
 
 
 
@@ -74,6 +75,7 @@ app.use('/api/payments', require('./routes/paymentRoutes'));
 app.use('/api/webhooks', require('./routes/webhookRoutes'));
 app.use('/api/institute-plans', require('./routes/institutePlanRoutes'));
 app.use('/api/institutes', require('./routes/instituteRoutes'));
+app.use('/api/institute-admin', instituteAdminRoutes);
 
 
 
