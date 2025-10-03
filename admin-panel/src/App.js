@@ -40,13 +40,7 @@ import AdminCourseViewPage from './pages/AdminCourseViewPage';
 import AdminCourseLayout from './components/layout/course/AdminCourseLayout';
 import InstitutionalSubscriptionPlansPage from './pages/InstitutionalSubscriptionPlansPage';
 import InstitutionalUserManagementPage from './pages/InstitutionalUserManagementPage';
-import InstituteDetailPage from './pages/InstituteDetailPage';
-
-
-// --- Import the new Referrals pages ---
-import AdminReferralsPage from './pages/AdminReferralsPage';
-import UserReferralsPage from './pages/UserReferralsPage';
-
+import InstituteDetailPage from './pages/InstituteDetailPage'; // Add this import
 
 
 
@@ -89,16 +83,13 @@ function App() {
               <Route path="/user-generated-courses" element={<AdminProtectedRoute><UserGeneratedCoursesPage /></AdminProtectedRoute>} />
                 <Route path="/admin/certificate/:courseId" element={<AdminProtectedRoute><AdminCertificatePage /></AdminProtectedRoute>} />
                <Route path="/admin/view-course/:courseId" element={<AdminProtectedRoute><AdminCourseLayout /></AdminProtectedRoute>}>
+              
              <Route path="lesson/:subtopicId/:lessonId" element={<AdminLessonContentPage />} />
              
              </Route>
-
-             <Route path="/institutional-subscription-plans" element={<AdminProtectedRoute><InstitutionalSubscriptionPlansPage /></AdminProtectedRoute>} />
-             <Route path="/institutional-user-management" element={<AdminProtectedRoute><InstitutionalUserManagementPage /></AdminProtectedRoute>} />
-             <Route path="/institute/:id" element={<InstituteDetailPage />} />
-              {/* --- START: New Referral Routes --- */}
-              <Route path="/referrals/admin" element={<AdminProtectedRoute><AdminReferralsPage /></AdminProtectedRoute>} />
-              <Route path="/referrals/user" element={<AdminProtectedRoute><UserReferralsPage /></AdminProtectedRoute>} />
+              <Route path="/institutional-subscription-plans" element={<AdminProtectedRoute><InstitutionalSubscriptionPlansPage /></AdminProtectedRoute>} />
+              <Route path="/institutional-user-management" element={<AdminProtectedRoute><InstitutionalUserManagementPage /></AdminProtectedRoute>} />
+              <Route path="/institute/:id" element={<AdminProtectedRoute><InstituteDetailPage /></AdminProtectedRoute>} />
            {/* --- END OF NEW ROUTES --- */}
            <Route 
             path="/admin/course-player/:id/lesson/:subtopicId/:lessonId" 

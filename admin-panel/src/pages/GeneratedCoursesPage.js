@@ -6,6 +6,7 @@ import * as courseApi from '../services/preGenCourseService';
 import * as categoryApi from '../services/categoryService';
 import Pagination from '../components/common/Pagination';
 
+
 const PageContainer = styled.div`
   padding: 2rem;
   width: 100%;

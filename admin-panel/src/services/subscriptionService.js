@@ -1,6 +1,5 @@
 import axios from 'axios';
 
-
 const API_URL = '/api/subscriptions';
 
 const getAuthToken = () => localStorage.getItem('adminToken');

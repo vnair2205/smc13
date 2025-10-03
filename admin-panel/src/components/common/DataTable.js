@@ -6,9 +6,7 @@ const TableWrapper = styled.div`
 `;
 
 const StyledTable = styled.table`
-  /* --- REMOVE THIS LINE --- */
-  /* width: 100%; */
-  
+  width: 100%;
   border-collapse: collapse;
   th, td {
     padding: 1rem;
@@ -38,7 +36,6 @@ const DataTable = ({ columns, data }) => {
               <th key={col.key}>{col.title}</th>
             ))}
           </tr>
-          
         </thead>
         <tbody>
           {data.length > 0 ? (

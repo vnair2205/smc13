@@ -3,7 +3,7 @@ import styled from 'styled-components';
 import { NavLink, useNavigate } from 'react-router-dom';
 import {
   FiGrid, FiUsers, FiLogOut, FiBookOpen, FiChevronDown, FiChevronUp,
-  FiMessageSquare, FiUsers as FiTeam, FiFileText, FiFile, FiCreditCard, FiShare2
+  FiMessageSquare, FiUsers as FiTeam, FiFileText, FiFile, FiCreditCard
 } from 'react-icons/fi';
 import logo from '../../assets/seekmycourse_logo.png';
 import { FaBook } from 'react-icons/fa';
@@ -38,23 +38,6 @@ const MenuList = styled.ul`
   margin: 0;
   margin-top: 2rem;
   flex-grow: 1;
-  overflow-y: auto; /* This enables vertical scrolling */
-
-  /* Custom scrollbar styling for a better look */
-  &::-webkit-scrollbar {
-    width: 8px;
-  }
-  &::-webkit-scrollbar-track {
-    background: #1e1e2d;
-  }
-  &::-webkit-scrollbar-thumb {
-    background-color: #555;
-    border-radius: 4px;
-    border: 2px solid #1e1e2d;
-  }
-  &::-webkit-scrollbar-thumb:hover {
-    background: #777;
-  }
 `;
 
 const MenuItem = styled.li`
@@ -158,7 +141,6 @@ const Sidebar = () => {
   const navigate = useNavigate();
   const [isCoursesMenuOpen, setCoursesMenuOpen] = useState(false);
   const [isInstitutionalUsersMenuOpen, setInstitutionalUsersMenuOpen] = useState(false);
-  const [isReferralsMenuOpen, setReferralsMenuOpen] = useState(false);
 
   const logout = () => {
     localStorage.removeItem('adminToken');
@@ -251,24 +233,6 @@ const Sidebar = () => {
                     <FiCreditCard />
                     <span>Subscription Plans</span>
                 </StyledNavLink>
-            </MenuItem>
-
-             <MenuItem>
-                <SubMenuHeader onClick={() => setReferralsMenuOpen(!isReferralsMenuOpen)}>
-                    <div>
-                        <FiShare2 />
-                        <span>Referrals</span>
-                    </div>
-                    {isReferralsMenuOpen ? <FiChevronUp /> : <FiChevronDown />}
-                </SubMenuHeader>
-                <SubMenuList $isOpen={isReferralsMenuOpen}>
-                    <li>
-                        <SubMenuLink to="/referrals/admin">Admin Referrals</SubMenuLink>
-                    </li>
-                    <li>
-                        <SubMenuLink to="/referrals/user">User Referrals</SubMenuLink>
-                    </li>
-                </SubMenuList>
             </MenuItem>
             <MenuItem>
             <StyledNavLink to="/team">

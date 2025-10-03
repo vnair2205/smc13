@@ -86,14 +86,21 @@ const FilterContainer = styled.div`
 `;
 
 const StyledSelect = styled.select`
-  padding: 0.75rem 2.5rem 0.75rem 1rem;
+  /* --- Basic Appearance --- */
+  padding: 0.75rem 2.5rem 0.75rem 1rem; /* Add space on the right for the arrow */
   border-radius: 8px;
   border: 1px solid ${({ theme }) => theme.colors.border};
+
+  /* --- Force Dark Theme Colors --- */
   background-color: #1e1e32;
   color: ${({ theme }) => theme.colors.text};
+
+  /* --- Remove native browser styling --- */
   -webkit-appearance: none;
   -moz-appearance: none;
   appearance: none;
+
+  /* --- Add Custom Dropdown Arrow --- */
   background-image: url("data:image/svg+xml,%3csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='${({
     theme,
   }) =>
@@ -110,7 +117,6 @@ const StyledSelect = styled.select`
     border-color: ${({ theme }) => theme.colors.primary};
   }
 `;
-
 const ActionButton = styled.button`
   background: none;
   border: none;
@@ -172,14 +178,17 @@ const InstitutionalUserManagementPage = () => {
         try {
             await instituteService.createInstitute(instituteData);
             setIsModalOpen(false);
-            fetchInstitutes(); // Refetch data
-            fetchStats(); // Refetch stats
+            fetchInstitutes();
+            fetchStats();
         } catch (error) {
             console.error("Failed to save institute:", error);
         }
     };
-
-    const columns = [
+    
+    // --- THIS IS THE DEFINITIVE FIX ---
+    // Added explicit `render` functions to all columns to ensure only strings are rendered.
+    // Also added safety checks (`record && record.admin`) to prevent crashes if a row's data is incomplete.
+     const columns = [
         {
             title: 'Institute Name',
             key: 'instituteName',
@@ -218,7 +227,6 @@ const InstitutionalUserManagementPage = () => {
             title: 'Actions',
             key: 'actions',
             render: (record) => (
-                // --- THIS IS THE CORRECTED LINE ---
                 <ActionButton onClick={() => record && navigate(`/institute/${record._id}`)}>
                     <FiEye />
                 </ActionButton>

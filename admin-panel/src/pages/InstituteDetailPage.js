@@ -1,20 +1,21 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useParams } from 'react-router-dom';
 import styled from 'styled-components';
 import instituteService from '../services/instituteService';
 import Preloader from '../components/common/Preloader';
-import PlanCard from '../components/institutes/PlanCard';
-
-import InstituteDetailsCard from '../components/institutes/InstituteDetailsCard';
+import PlanDetailsCard from '../components/institutes/PlanDetailsCard';
+import InstituteInfoCard from '../components/institutes/InstituteInfoCard';
 import AdminDetailsCard from '../components/institutes/AdminDetailsCard';
 import ClassCard from '../components/institutes/ClassCard';
-import SectionCard from '../components/institutes/SectionCard';
-import SubjectCard from '../components/institutes/SubjectCard';
-import TeacherCard from '../components/institutes/TeacherCard';
-import StudentTable from '../components/institutes/StudentTable';
 
 const PageContainer = styled.div`
   padding: 2rem;
+  background-color: ${({ theme }) => theme.colors.background};
+`;
+
+const Title = styled.h1`
+  font-size: 2rem;
+  margin-bottom: 2rem;
 `;
 
 const GridContainer = styled.div`
@@ -23,80 +24,46 @@ const GridContainer = styled.div`
   gap: 2rem;
 `;
 
-const FullWidthContainer = styled.div`
-  grid-column: 1 / -1;
-`;
-
-
 const InstituteDetailPage = () => {
-    const { id } = useParams();
-    const [instituteData, setInstituteData] = useState(null);
-    const [loading, setLoading] = useState(true);
+  const { id } = useParams();
+  const [institute, setInstitute] = useState(null);
+  const [isLoading, setIsLoading] = useState(true);
 
-    const fetchInstituteData = useCallback(async () => {
-        try {
-            setLoading(true);
-            const res = await instituteService.getInstituteById(id);
-            setInstituteData(res.data);
-        } catch (error) {
-            console.error("Failed to fetch institute details", error);
-        } finally {
-            setLoading(false);
-        }
-    }, [id]);
+  useEffect(() => {
+    const fetchInstitute = async () => {
+      try {
+        const { data } = await instituteService.getInstituteById(id);
+        setInstitute(data);
+      } catch (error) {
+        console.error("Failed to fetch institute details:", error);
+      } finally {
+        setIsLoading(false);
+      }
+    };
+    fetchInstitute();
+  }, [id]);
 
-    useEffect(() => {
-        fetchInstituteData();
-    }, [fetchInstituteData]);
+  if (isLoading) {
+    return <Preloader />;
+  }
 
-    if (loading) {
-        return <Preloader />;
-    }
+  if (!institute) {
+    return <PageContainer><Title>Institute not found.</Title></PageContainer>;
+  }
 
-    if (!instituteData) {
-        return <PageContainer><h2>Institute not found.</h2></PageContainer>;
-    }
-
-    const { institute, classes, sections, subjects, teachers, users } = instituteData;
-
-    return (
-        <PageContainer>
-            <h1>{institute.instituteName}</h1>
-           <GridContainer>
-                <PlanCard institute={institute} onUpdate={fetchInstituteData} />
-                <InstituteDetailsCard institute={institute} onUpdate={fetchInstituteData} />
-                
-              
-                <AdminDetailsCard admin={institute.admin} onUpdate={fetchInstituteData} />
-
-                
-                    <ClassCard classes={classes} instituteId={id} onUpdate={fetchInstituteData} />
-                    <SectionCard sections={sections} classes={classes} instituteId={id} onUpdate={fetchInstituteData} />
-                     <SubjectCard subjects={subjects} instituteId={id} onUpdate={fetchInstituteData} />
-                    
-               
-            </GridContainer>
-             <FullWidthContainer>
-                <TeacherCard 
-                    teachers={teachers} 
-                    instituteId={id} 
-                    classes={classes} 
-                    sections={sections} 
-                    subjects={subjects} 
-                    onUpdate={fetchInstituteData} 
-                />
-            </FullWidthContainer>
-             <FullWidthContainer>
-                <StudentTable 
-                    students={users} 
-                    instituteId={id} 
-                    classes={classes} 
-                    sections={sections} 
-                    onUpdate={fetchInstituteData} 
-                />
-            </FullWidthContainer>
-        </PageContainer>
-    );
+  return (
+    <PageContainer>
+      <Title>{institute.instituteName}</Title>
+      <GridContainer>
+     <PlanDetailsCard institute={institute} />
+        <InstituteInfoCard institute={institute} />
+        <AdminDetailsCard admin={institute.admin} />
+         <ClassCard instituteId={institute._id} />
+        {/* <SectionCard instituteId={institute._id} classes={classes} /> */}
+        {/* <SubjectCard instituteId={institute._id} /> */}
+      </GridContainer>
+    </PageContainer>
+  );
 };
 
 export default InstituteDetailPage;

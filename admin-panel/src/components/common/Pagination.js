@@ -1,5 +1,6 @@
 import React from 'react';
 import styled from 'styled-components';
+import { FiChevronLeft, FiChevronRight } from 'react-icons/fi';
 
 const PaginationContainer = styled.div`
   display: flex;
@@ -9,13 +10,22 @@ const PaginationContainer = styled.div`
 `;
 
 const PageButton = styled.button`
-  background: ${({ isActive, theme }) => (isActive ? theme.colors.primary : '#33333e')};
-  color: white;
-  border: none;
-  border-radius: 4px;
-  padding: 0.5rem 1rem;
-  margin: 0 0.25rem;
+  background: ${({ active, theme }) => (active ? theme.colors.primary : 'transparent')};
+  color: ${({ active, theme }) => (active ? '#FFFFFF' : theme.colors.textSecondary)};
+  border: 1px solid ${({ active, theme }) => (active ? theme.colors.primary : theme.colors.border)};
+  padding: 0.5rem 0.8rem;
+  margin: 0 0.2rem;
   cursor: pointer;
+  border-radius: 6px;
+  font-size: 0.9rem;
+  transition: all 0.2s ease-in-out;
+
+  &:hover {
+    background-color: ${({ theme }) => theme.colors.primary};
+    color: #FFFFFF;
+    border-color: ${({ theme }) => theme.colors.primary};
+  }
+
   &:disabled {
     cursor: not-allowed;
     opacity: 0.5;
@@ -23,17 +33,23 @@ const PageButton = styled.button`
 `;
 
 const Pagination = ({ currentPage, totalPages, onPageChange }) => {
+  const pageNumbers = [];
+  for (let i = 1; i <= totalPages; i++) {
+    pageNumbers.push(i);
+  }
+
   return (
     <PaginationContainer>
       <PageButton onClick={() => onPageChange(currentPage - 1)} disabled={currentPage === 1}>
-        Previous
+        <FiChevronLeft />
       </PageButton>
-      {/* You can add page number buttons here if desired */}
-      <span style={{ margin: '0 1rem' }}>
-        Page {currentPage} of {totalPages}
-      </span>
+      {pageNumbers.map((number) => (
+        <PageButton key={number} active={currentPage === number} onClick={() => onPageChange(number)}>
+          {number}
+        </PageButton>
+      ))}
       <PageButton onClick={() => onPageChange(currentPage + 1)} disabled={currentPage === totalPages}>
-        Next
+        <FiChevronRight />
       </PageButton>
     </PaginationContainer>
   );
